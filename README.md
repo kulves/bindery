@@ -2,25 +2,40 @@
 
 A local PDF workshop: **merge**, **split**, and **edit pages** in the browser. Files never leave your machine.
 
-This is the starting point for a fuller PDF editor (text, highlight, draw, images, signatures). Those tools are stubbed in the Edit tab today.
+Free to download, share, and remix under the [MIT License](LICENSE).
 
-## Run it on your PC
+## Download
 
-You need [Node.js 22+](https://nodejs.org/) and npm.
+**[Download Bindery (zip)](https://github.com/kulves/bindery/releases/latest)** · or grab **Source code (zip)** from that page.
+
+You can also clone the repo:
 
 ```bash
 git clone https://github.com/kulves/bindery.git
-cd bindery
+```
+
+Share that GitHub link with friends — the project is public.
+
+## Run it on your PC
+
+You need [Node.js 22+](https://nodejs.org/) (the LTS installer is fine) and npm, which comes with it.
+
+**From the zip**
+
+1. Unzip `Bindery-v1.0.0.zip`
+2. Open a terminal in the unzipped folder
+3. Run:
+
+```bash
 npm install
 npm run dev
 ```
 
-Then open [http://localhost:8080](http://localhost:8080).
+4. Open [http://localhost:8080](http://localhost:8080)
 
-If you downloaded the zip instead of cloning:
+**From git**
 
 ```bash
-unzip bindery-source.zip -d bindery
 cd bindery
 npm install
 npm run dev
@@ -35,6 +50,8 @@ npm run dev
 ## Open in your IDE
 
 Open the `bindery` folder in VS Code, Cursor, WebStorm, or whatever you use. After `npm install`, TypeScript and Tailwind should resolve normally.
+
+This is also the starting point for a fuller PDF editor (text, highlight, draw, images, signatures). Those tools are stubbed in the Edit tab today.
 
 ### Where to extend the full editor
 
