@@ -1,0 +1,16 @@
+node_modules/
+.vercel/
+dist/
+.output/
+screenshots/
+artifacts/
+*.log
+.DS_Store
+.project_id
+.node_modules.lock
+.grok/preview.log
+.grok/skills/
+.grok/references/
+.grok/status
+AGENTS.md
+AGENTS.project.md
