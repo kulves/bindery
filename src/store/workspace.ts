@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import type { PdfDoc, SplitMode, ToolId } from "@/lib/pdf";
+import type { TextBox } from "@/lib/pdf-text";
 
 interface WorkspaceState {
   tool: ToolId;
   docs: PdfDoc[];
   activeId: string | null;
   selected: Record<string, number[]>;
+  textBoxes: Record<string, TextBox[]>;
   splitMode: SplitMode;
   rangeText: string;
   everyN: number;
@@ -24,6 +26,10 @@ interface WorkspaceState {
   togglePage: (id: string, page: number, rangeFrom?: number | null) => void;
   selectAll: (id: string) => void;
   clearSelected: (id: string) => void;
+  addTextBox: (docId: string, box: TextBox) => void;
+  patchTextBox: (docId: string, id: string, patch: Partial<TextBox>) => void;
+  removeTextBox: (docId: string, id: string) => void;
+  clearTextBoxes: (docId: string) => void;
   setSplitMode: (mode: SplitMode) => void;
   setRangeText: (value: string) => void;
   setEveryN: (n: number) => void;
@@ -37,6 +43,7 @@ const INITIAL = {
   docs: [] as PdfDoc[],
   activeId: null as string | null,
   selected: {} as Record<string, number[]>,
+  textBoxes: {} as Record<string, TextBox[]>,
   splitMode: "extract" as SplitMode,
   rangeText: "1-3, 4-6",
   everyN: 2,
@@ -52,12 +59,15 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     set((state) => {
       const docs = [...state.docs, ...incoming];
       const selected = { ...state.selected };
+      const textBoxes = { ...state.textBoxes };
       for (const doc of incoming) {
         if (!selected[doc.id]) selected[doc.id] = [];
+        if (!textBoxes[doc.id]) textBoxes[doc.id] = [];
       }
       return {
         docs,
         selected,
+        textBoxes,
         activeId: state.activeId ?? incoming[0]?.id ?? null,
       };
     }),
@@ -65,10 +75,13 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     set((state) => {
       const docs = state.docs.filter((d) => d.id !== id);
       const selected = { ...state.selected };
+      const textBoxes = { ...state.textBoxes };
       delete selected[id];
+      delete textBoxes[id];
       return {
         docs,
         selected,
+        textBoxes,
         activeId: state.activeId === id ? (docs[0]?.id ?? null) : state.activeId,
       };
     }),
@@ -115,9 +128,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
         patch.pageCount !== undefined
           ? {
               ...state.selected,
-              [id]: (state.selected[id] ?? []).filter(
-                (page) => page < (patch.pageCount ?? 0),
-              ),
+              [id]: (state.selected[id] ?? []).filter((page) => page < (patch.pageCount ?? 0)),
             }
           : state.selected,
     })),
@@ -146,8 +157,29 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
         },
       };
     }),
-  clearSelected: (id) =>
-    set((state) => ({ selected: { ...state.selected, [id]: [] } })),
+  clearSelected: (id) => set((state) => ({ selected: { ...state.selected, [id]: [] } })),
+  addTextBox: (docId, box) =>
+    set((state) => ({
+      textBoxes: { ...state.textBoxes, [docId]: [...(state.textBoxes[docId] ?? []), box] },
+    })),
+  patchTextBox: (docId, id, patch) =>
+    set((state) => ({
+      textBoxes: {
+        ...state.textBoxes,
+        [docId]: (state.textBoxes[docId] ?? []).map((box) => (box.id === id ? { ...box, ...patch } : box)),
+      },
+    })),
+  removeTextBox: (docId, id) =>
+    set((state) => ({
+      textBoxes: {
+        ...state.textBoxes,
+        [docId]: (state.textBoxes[docId] ?? []).filter((box) => box.id !== id),
+      },
+    })),
+  clearTextBoxes: (docId) =>
+    set((state) => ({
+      textBoxes: { ...state.textBoxes, [docId]: [] },
+    })),
   setSplitMode: (splitMode) => set({ splitMode }),
   setRangeText: (rangeText) => set({ rangeText }),
   setEveryN: (everyN) => set({ everyN }),

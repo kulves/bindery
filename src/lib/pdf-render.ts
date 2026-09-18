@@ -2,7 +2,7 @@ type Pdfjs = typeof import("pdfjs-dist");
 
 let pdfjsPromise: Promise<Pdfjs> | null = null;
 
-async function loadPdfjs(): Promise<Pdfjs> {
+export async function loadPdfjs(): Promise<Pdfjs> {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
       const pdfjs = await import("pdfjs-dist");
@@ -55,6 +55,34 @@ export async function renderThumbnails(
       onPage(i - 1, canvas.toDataURL("image/jpeg", 0.76));
       page.cleanup();
     }
+  } finally {
+    await pdf.destroy();
+  }
+}
+
+export async function renderPageImage(
+  bytes: Uint8Array,
+  pageIndex: number,
+  scale = 1.6,
+): Promise<string> {
+  if (typeof window === "undefined") return "";
+  const pdfjs = await loadPdfjs();
+  const data = new Uint8Array(bytes.byteLength);
+  data.set(bytes);
+  const pdf = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
+  try {
+    const page = await pdf.getPage(pageIndex + 1);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx) return "";
+    canvas.width = Math.max(1, Math.ceil(viewport.width));
+    canvas.height = Math.max(1, Math.ceil(viewport.height));
+    ctx.fillStyle = "#faf7f0";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    page.cleanup();
+    return canvas.toDataURL("image/jpeg", 0.92);
   } finally {
     await pdf.destroy();
   }

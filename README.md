@@ -2,6 +2,8 @@
 
 A local PDF workshop: **merge**, **split**, and **edit pages** in the browser. Files never leave your machine.
 
+On the Edit tab you can add text boxes, rewrite existing lines, rotate, and reorder pages.
+
 Free to download, share, and remix under the [MIT License](LICENSE).
 
 ## Download
