@@ -18,6 +18,36 @@ interface PageStageProps {
   onRemove: (id: string) => void;
 }
 
+type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+type Drag =
+  | { kind: "move"; id: string; ox: number; oy: number; nx: number; ny: number }
+  | {
+      kind: "resize";
+      id: string;
+      handle: Handle;
+      ox: number;
+      oy: number;
+      nx: number;
+      ny: number;
+      nw: number;
+      nh: number;
+    };
+
+const HANDLES: Array<{ id: Handle; label: string; className: string }> = [
+  { id: "nw", label: "Resize from top left", className: "top-0 left-0 cursor-nwse-resize" },
+  { id: "n", label: "Resize from top", className: "top-0 left-1/2 cursor-ns-resize" },
+  { id: "ne", label: "Resize from top right", className: "top-0 left-full cursor-nesw-resize" },
+  { id: "e", label: "Resize from right", className: "top-1/2 left-full cursor-ew-resize" },
+  { id: "se", label: "Resize from bottom right", className: "top-full left-full cursor-nwse-resize" },
+  { id: "s", label: "Resize from bottom", className: "top-full left-1/2 cursor-ns-resize" },
+  { id: "sw", label: "Resize from bottom left", className: "top-full left-0 cursor-nesw-resize" },
+  { id: "w", label: "Resize from left", className: "top-1/2 left-0 cursor-ew-resize" },
+];
+
+const MIN_W = 0.06;
+const MIN_H = 0.024;
+
 export function PageStage({
   bytes,
   page,
@@ -35,7 +65,7 @@ export function PageStage({
   const stageRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState(fallback ?? "");
   const [lines, setLines] = useState<TextLine[]>([]);
-  const drag = useRef<{ id: string; ox: number; oy: number; nx: number; ny: number } | null>(null);
+  const drag = useRef<Drag | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -75,8 +105,8 @@ export function PageStage({
     const rect = stageRef.current?.getBoundingClientRect();
     if (!rect || rect.width < 1 || rect.height < 1) return null;
     return {
-      nx: clamp01((event.clientX - rect.left) / rect.width),
-      ny: clamp01((event.clientY - rect.top) / rect.height),
+      nx: clamp((event.clientX - rect.left) / rect.width, 0, 1),
+      ny: clamp((event.clientY - rect.top) / rect.height, 0, 1),
     };
   }
 
@@ -85,8 +115,8 @@ export function PageStage({
     if (event.target !== event.currentTarget) return;
     const point = pointFromEvent(event);
     if (!point) return;
-    const nh = Math.max(0.028, (size * 1.45) / 792);
-    const nw = 0.4;
+    const nh = Math.max(0.1, (size * 3.2) / 792);
+    const nw = 0.42;
     const box: TextBox = {
       id: crypto.randomUUID(),
       page,
@@ -115,8 +145,8 @@ export function PageStage({
       page,
       nx: line.nx,
       ny: line.ny,
-      nw: Math.max(line.nw, 0.08),
-      nh: Math.max(line.nh, 0.02),
+      nw: Math.max(line.nw, MIN_W),
+      nh: Math.max(line.nh, MIN_H),
       text: line.str,
       size: Math.round(line.size) || size,
       font: "serif",
@@ -128,28 +158,52 @@ export function PageStage({
 
   function onBoxPointerDown(event: ReactPointerEvent<HTMLDivElement>, box: TextBox) {
     if (!textMode) return;
+    if ((event.target as HTMLElement).closest("[data-handle]")) return;
     if ((event.target as HTMLElement).tagName === "TEXTAREA") return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { id: box.id, ox: event.clientX, oy: event.clientY, nx: box.nx, ny: box.ny };
+    drag.current = { kind: "move", id: box.id, ox: event.clientX, oy: event.clientY, nx: box.nx, ny: box.ny };
     onSelect(box.id);
   }
 
-  function onBoxPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+  function onHandlePointerDown(event: ReactPointerEvent<HTMLButtonElement>, box: TextBox, handle: Handle) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = {
+      kind: "resize",
+      id: box.id,
+      handle,
+      ox: event.clientX,
+      oy: event.clientY,
+      nx: box.nx,
+      ny: box.ny,
+      nw: box.nw,
+      nh: box.nh,
+    };
+    onSelect(box.id);
+  }
+
+  function onDragMove(event: ReactPointerEvent) {
     const active = drag.current;
     const rect = stageRef.current?.getBoundingClientRect();
     if (!active || !rect) return;
     const dx = (event.clientX - active.ox) / rect.width;
     const dy = (event.clientY - active.oy) / rect.height;
-    const box = pageBoxes.find((item) => item.id === active.id);
-    if (!box) return;
-    onPatch(active.id, {
-      nx: clamp01(active.nx + dx, 1 - box.nw),
-      ny: clamp01(active.ny + dy, 1 - box.nh),
-    });
+    if (active.kind === "move") {
+      const box = pageBoxes.find((item) => item.id === active.id);
+      if (!box) return;
+      onPatch(active.id, {
+        nx: clamp(active.nx + dx, 0, 1 - box.nw),
+        ny: clamp(active.ny + dy, 0, 1 - box.nh),
+      });
+      return;
+    }
+    const next = resizeBox(active, dx, dy);
+    onPatch(active.id, { nx: next.nx, ny: next.ny, nw: next.nw, nh: next.nh });
   }
 
-  function onBoxPointerUp() {
+  function onDragUp() {
     drag.current = null;
   }
 
@@ -160,7 +214,7 @@ export function PageStage({
       aria-label={`Page ${page + 1}`}
       onClick={placeBox}
       className={cn(
-        "relative mx-auto max-h-[70vh] w-max max-w-full overflow-hidden rounded-md bg-card shadow-[var(--shadow-page)]",
+        "relative mx-auto max-h-[70vh] w-max max-w-full rounded-md bg-card shadow-[var(--shadow-page)]",
         textMode ? "cursor-text" : "cursor-default",
       )}
     >
@@ -169,10 +223,10 @@ export function PageStage({
           src={preview}
           alt=""
           draggable={false}
-          className="pointer-events-none block max-h-[70vh] w-auto max-w-full"
+          className="pointer-events-none block max-h-[70vh] w-auto max-w-full overflow-hidden rounded-md"
         />
       ) : (
-        <div className="page-skeleton aspect-[8.5/11] h-[70vh] max-h-[70vh] w-auto" />
+        <div className="page-skeleton aspect-[8.5/11] h-[70vh] max-h-[70vh] w-auto rounded-md" />
       )}
 
       {textMode &&
@@ -207,8 +261,8 @@ export function PageStage({
           <div
             key={box.id}
             onPointerDown={(event) => onBoxPointerDown(event, box)}
-            onPointerMove={onBoxPointerMove}
-            onPointerUp={onBoxPointerUp}
+            onPointerMove={onDragMove}
+            onPointerUp={onDragUp}
             onClick={(event) => event.stopPropagation()}
             className={cn(
               "absolute",
@@ -241,6 +295,24 @@ export function PageStage({
                 box.size >= 28 ? "text-3xl" : box.size >= 20 ? "text-xl" : box.size >= 14 ? "text-base" : "text-sm",
               )}
             />
+            {selected &&
+              HANDLES.map((handle) => (
+                <button
+                  key={handle.id}
+                  type="button"
+                  data-handle={handle.id}
+                  aria-label={handle.label}
+                  onPointerDown={(event) => onHandlePointerDown(event, box, handle.id)}
+                  onPointerMove={onDragMove}
+                  onPointerUp={onDragUp}
+                  className={cn(
+                    "absolute z-20 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center touch-none",
+                    handle.className,
+                  )}
+                >
+                  <span className="block size-3 rounded-xs bg-primary shadow-[var(--shadow-border)] ring-2 ring-card" />
+                </button>
+              ))}
           </div>
         );
       })}
@@ -248,6 +320,54 @@ export function PageStage({
   );
 }
 
-function clamp01(n: number, max = 1) {
-  return Math.min(max, Math.max(0, n));
+function resizeBox(
+  start: Extract<Drag, { kind: "resize" }>,
+  dx: number,
+  dy: number,
+) {
+  let nx = start.nx;
+  let ny = start.ny;
+  let nw = start.nw;
+  let nh = start.nh;
+  const { handle } = start;
+
+  if (handle.includes("e")) nw = start.nw + dx;
+  if (handle.includes("s")) nh = start.nh + dy;
+  if (handle.includes("w")) {
+    nw = start.nw - dx;
+    nx = start.nx + dx;
+  }
+  if (handle.includes("n")) {
+    nh = start.nh - dy;
+    ny = start.ny + dy;
+  }
+
+  if (nw < MIN_W) {
+    if (handle.includes("w")) nx = start.nx + start.nw - MIN_W;
+    nw = MIN_W;
+  }
+  if (nh < MIN_H) {
+    if (handle.includes("n")) ny = start.ny + start.nh - MIN_H;
+    nh = MIN_H;
+  }
+  if (nx < 0) {
+    nw += nx;
+    nx = 0;
+  }
+  if (ny < 0) {
+    nh += ny;
+    ny = 0;
+  }
+  if (nx + nw > 1) nw = 1 - nx;
+  if (ny + nh > 1) nh = 1 - ny;
+  return {
+    nx,
+    ny,
+    nw: Math.max(MIN_W, nw),
+    nh: Math.max(MIN_H, nh),
+  };
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
 }

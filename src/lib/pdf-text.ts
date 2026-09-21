@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
 import { loadPdfjs } from "@/lib/pdf-render";
 
 export type TextFont = "sans" | "serif";
@@ -178,8 +178,8 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
         const width = Math.max(8, Math.max(...xs) - x);
         const height = Math.max(box.size, Math.max(...ys) - y);
         const font = box.font === "serif" ? times : helvetica;
-        const lines = winAnsi(box.text).split("\n");
         const size = Math.max(6, Math.min(72, box.size));
+        const lines = wrapText(winAnsi(box.text), font, size, width - 2);
 
         if (box.replace) {
           page.drawRectangle({
@@ -193,9 +193,9 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
 
         let baseline = y + height - size;
         for (const line of lines) {
-          const drawn = line.trimEnd();
-          if (drawn) {
-            page.drawText(drawn, { x, y: baseline, size, font, color: INK });
+          if (baseline < y) break;
+          if (line) {
+            page.drawText(line, { x, y: baseline, size, font, color: INK });
           }
           baseline -= size * 1.25;
         }
@@ -207,6 +207,43 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
   }
 
   return pdf.save();
+}
+
+function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
+  const width = Math.max(8, maxWidth);
+  const out: string[] = [];
+  for (const paragraph of text.split("\n")) {
+    if (!paragraph) {
+      out.push("");
+      continue;
+    }
+    let line = "";
+    for (const word of paragraph.split(/\s+/)) {
+      const next = line ? `${line} ${word}` : word;
+      if (font.widthOfTextAtSize(next, size) <= width) {
+        line = next;
+        continue;
+      }
+      if (line) out.push(line);
+      if (font.widthOfTextAtSize(word, size) <= width) {
+        line = word;
+        continue;
+      }
+      let chunk = "";
+      for (const ch of word) {
+        const trial = chunk + ch;
+        if (font.widthOfTextAtSize(trial, size) <= width) {
+          chunk = trial;
+        } else {
+          if (chunk) out.push(chunk);
+          chunk = ch;
+        }
+      }
+      line = chunk;
+    }
+    if (line) out.push(line);
+  }
+  return out;
 }
 
 function clamp01(n: number) {
