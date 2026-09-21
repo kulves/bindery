@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { GripHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractPageLines, type TextBox, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
@@ -21,7 +22,7 @@ interface PageStageProps {
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 type Drag =
-  | { kind: "move"; id: string; ox: number; oy: number; nx: number; ny: number }
+  | { kind: "move"; id: string; ox: number; oy: number; nx: number; ny: number; dragging: boolean }
   | {
       kind: "resize";
       id: string;
@@ -158,12 +159,32 @@ export function PageStage({
 
   function onBoxPointerDown(event: ReactPointerEvent<HTMLDivElement>, box: TextBox) {
     if (!textMode) return;
-    if ((event.target as HTMLElement).closest("[data-handle]")) return;
+    if ((event.target as HTMLElement).closest("[data-handle],[data-move]")) return;
     if ((event.target as HTMLElement).tagName === "TEXTAREA") return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { kind: "move", id: box.id, ox: event.clientX, oy: event.clientY, nx: box.nx, ny: box.ny };
+    beginMove(event, box);
+  }
+
+  function beginMove(event: ReactPointerEvent, box: TextBox) {
+    drag.current = {
+      kind: "move",
+      id: box.id,
+      ox: event.clientX,
+      oy: event.clientY,
+      nx: box.nx,
+      ny: box.ny,
+      dragging: false,
+    };
     onSelect(box.id);
+  }
+
+  function onMovePointerDown(event: ReactPointerEvent<HTMLButtonElement>, box: TextBox) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    beginMove(event, box);
+    if (drag.current?.kind === "move") drag.current.dragging = true;
   }
 
   function onHandlePointerDown(event: ReactPointerEvent<HTMLButtonElement>, box: TextBox, handle: Handle) {
@@ -193,6 +214,9 @@ export function PageStage({
     if (active.kind === "move") {
       const box = pageBoxes.find((item) => item.id === active.id);
       if (!box) return;
+      const pixels = Math.hypot(event.clientX - active.ox, event.clientY - active.oy);
+      if (!active.dragging && pixels < 6) return;
+      active.dragging = true;
       onPatch(active.id, {
         nx: clamp(active.nx + dx, 0, 1 - box.nw),
         ny: clamp(active.ny + dy, 0, 1 - box.nh),
@@ -293,8 +317,25 @@ export function PageStage({
                 "size-full resize-none bg-card/80 px-1 py-0.5 leading-tight text-foreground outline-none placeholder:text-muted-foreground",
                 box.font === "serif" ? "font-display" : "font-sans",
                 box.size >= 28 ? "text-3xl" : box.size >= 20 ? "text-xl" : box.size >= 14 ? "text-base" : "text-sm",
+                !selected && "pointer-events-none",
               )}
             />
+            {selected && (
+              <button
+                type="button"
+                data-move
+                aria-label="Move text box"
+                title="Drag to move"
+                onPointerDown={(event) => onMovePointerDown(event, box)}
+                onPointerMove={onDragMove}
+                onPointerUp={onDragUp}
+                className="absolute -top-11 left-1/2 z-30 flex h-11 w-16 -translate-x-1/2 cursor-grab items-center justify-center touch-none active:cursor-grabbing"
+              >
+                <span className="flex items-center justify-center rounded-sm bg-primary px-2 py-1 text-primary-foreground shadow-[var(--shadow-border)]">
+                  <GripHorizontal className="size-4" />
+                </span>
+              </button>
+            )}
             {selected &&
               HANDLES.map((handle) => (
                 <button

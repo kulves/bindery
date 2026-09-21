@@ -226,7 +226,7 @@ export function EditorView() {
         {textMode && (
           <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
             <p className="text-sm text-muted-foreground sm:flex-1">
-              Click a line to rewrite it, or click empty space to add a box. Drag a corner to resize.
+              Click a line to rewrite it, or click empty space to add a box. Drag the grip to move, a corner to resize.
             </p>
             <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               Size
