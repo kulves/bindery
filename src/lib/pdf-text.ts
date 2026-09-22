@@ -13,6 +13,8 @@ export interface TextBox {
   text: string;
   size: number;
   font: TextFont;
+  bold: boolean;
+  italic: boolean;
   replace: boolean;
   sourceId?: string;
 }
@@ -144,8 +146,16 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
   data.set(bytes);
   const js = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
   const pdf = await PDFDocument.load(bytes);
-  const helvetica = await pdf.embedFont(StandardFonts.Helvetica);
-  const times = await pdf.embedFont(StandardFonts.TimesRoman);
+  const faces = {
+    sans: await pdf.embedFont(StandardFonts.Helvetica),
+    sansB: await pdf.embedFont(StandardFonts.HelveticaBold),
+    sansI: await pdf.embedFont(StandardFonts.HelveticaOblique),
+    sansBi: await pdf.embedFont(StandardFonts.HelveticaBoldOblique),
+    serif: await pdf.embedFont(StandardFonts.TimesRoman),
+    serifB: await pdf.embedFont(StandardFonts.TimesRomanBold),
+    serifI: await pdf.embedFont(StandardFonts.TimesRomanItalic),
+    serifBi: await pdf.embedFont(StandardFonts.TimesRomanBoldItalic),
+  };
 
   try {
     const byPage = new Map<number, TextBox[]>();
@@ -177,7 +187,7 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
         const y = Math.min(...ys);
         const width = Math.max(8, Math.max(...xs) - x);
         const height = Math.max(box.size, Math.max(...ys) - y);
-        const font = box.font === "serif" ? times : helvetica;
+        const font = pickFace(faces, box.font, Boolean(box.bold), Boolean(box.italic));
         const size = Math.max(6, Math.min(72, box.size));
         const lines = wrapText(winAnsi(box.text), font, size, width - 2);
 
@@ -207,6 +217,33 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
   }
 
   return pdf.save();
+}
+
+function pickFace(
+  faces: {
+    sans: PDFFont;
+    sansB: PDFFont;
+    sansI: PDFFont;
+    sansBi: PDFFont;
+    serif: PDFFont;
+    serifB: PDFFont;
+    serifI: PDFFont;
+    serifBi: PDFFont;
+  },
+  font: TextFont,
+  bold: boolean,
+  italic: boolean,
+) {
+  if (font === "serif") {
+    if (bold && italic) return faces.serifBi;
+    if (bold) return faces.serifB;
+    if (italic) return faces.serifI;
+    return faces.serif;
+  }
+  if (bold && italic) return faces.sansBi;
+  if (bold) return faces.sansB;
+  if (italic) return faces.sansI;
+  return faces.sans;
 }
 
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {

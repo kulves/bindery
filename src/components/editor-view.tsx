@@ -1,9 +1,11 @@
 import { useState, type ReactNode } from "react";
 import {
+  Bold,
   ChevronDown,
   ChevronUp,
   Highlighter,
   ImageIcon,
+  Italic,
   PenTool,
   RotateCw,
   Stamp,
@@ -56,6 +58,8 @@ export function EditorView() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [font, setFont] = useState<TextFont>("sans");
   const [size, setSize] = useState(14);
+  const [bold, setBold] = useState(false);
+  const [italic, setItalic] = useState(false);
 
   if (docs.length === 0) {
     return (
@@ -264,6 +268,44 @@ export function EditorView() {
                 </button>
               ))}
             </div>
+            <div className="flex rounded-full bg-card p-1">
+              <button
+                type="button"
+                aria-label="Bold"
+                aria-pressed={selected?.bold ?? bold}
+                onClick={() => {
+                  const next = !(selected?.bold ?? bold);
+                  setBold(next);
+                  if (selected) patchTextBox(doc.id, selected.id, { bold: next });
+                }}
+                className={cn(
+                  "inline-flex size-11 items-center justify-center rounded-full",
+                  (selected?.bold ?? bold)
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground hover:bg-muted",
+                )}
+              >
+                <Bold className="size-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Italic"
+                aria-pressed={selected?.italic ?? italic}
+                onClick={() => {
+                  const next = !(selected?.italic ?? italic);
+                  setItalic(next);
+                  if (selected) patchTextBox(doc.id, selected.id, { italic: next });
+                }}
+                className={cn(
+                  "inline-flex size-11 items-center justify-center rounded-full",
+                  (selected?.italic ?? italic)
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground hover:bg-muted",
+                )}
+              >
+                <Italic className="size-4" />
+              </button>
+            </div>
             {selected && (
               <Button
                 variant="ghost"
@@ -344,6 +386,8 @@ export function EditorView() {
             selectedId={selectedId}
             font={font}
             size={size}
+            bold={bold}
+            italic={italic}
             onSelect={setSelectedId}
             onAdd={onAddBox}
             onPatch={(id, patch) => patchTextBox(doc.id, id, patch)}

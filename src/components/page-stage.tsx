@@ -13,6 +13,8 @@ interface PageStageProps {
   selectedId: string | null;
   font: TextFont;
   size: number;
+  bold: boolean;
+  italic: boolean;
   onSelect: (id: string | null) => void;
   onAdd: (box: TextBox) => void;
   onPatch: (id: string, patch: Partial<TextBox>) => void;
@@ -58,6 +60,8 @@ export function PageStage({
   selectedId,
   font,
   size,
+  bold,
+  italic,
   onSelect,
   onAdd,
   onPatch,
@@ -128,6 +132,8 @@ export function PageStage({
       text: "",
       size,
       font,
+      bold,
+      italic,
       replace: false,
     };
     onAdd(box);
@@ -151,6 +157,8 @@ export function PageStage({
       text: line.str,
       size: Math.round(line.size) || size,
       font: "serif",
+      bold: false,
+      italic: false,
       replace: true,
       sourceId: line.id,
     };
@@ -308,6 +316,14 @@ export function PageStage({
               onChange={(event) => onPatch(box.id, { text: event.target.value })}
               onKeyDown={(event) => {
                 if (event.key === "Escape") onSelect(null);
+                if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
+                  event.preventDefault();
+                  onPatch(box.id, { bold: !box.bold });
+                }
+                if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "i") {
+                  event.preventDefault();
+                  onPatch(box.id, { italic: !box.italic });
+                }
                 if ((event.key === "Backspace" || event.key === "Delete") && box.text === "") {
                   event.preventDefault();
                   onRemove(box.id);
@@ -316,6 +332,8 @@ export function PageStage({
               className={cn(
                 "size-full resize-none bg-card/80 px-1 py-0.5 leading-tight text-foreground outline-none placeholder:text-muted-foreground",
                 box.font === "serif" ? "font-display" : "font-sans",
+                box.bold && "font-bold",
+                box.italic && "italic",
                 box.size >= 28 ? "text-3xl" : box.size >= 20 ? "text-xl" : box.size >= 14 ? "text-base" : "text-sm",
                 !selected && "pointer-events-none",
               )}
