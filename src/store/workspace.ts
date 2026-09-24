@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { PdfDoc, SplitMode, ToolId } from "@/lib/pdf";
-import type { TextBox } from "@/lib/pdf-text";
+import type { HighlightMark, TextBox } from "@/lib/pdf-text";
 
 interface WorkspaceState {
   tool: ToolId;
@@ -8,6 +8,7 @@ interface WorkspaceState {
   activeId: string | null;
   selected: Record<string, number[]>;
   textBoxes: Record<string, TextBox[]>;
+  highlights: Record<string, HighlightMark[]>;
   splitMode: SplitMode;
   rangeText: string;
   everyN: number;
@@ -30,6 +31,10 @@ interface WorkspaceState {
   patchTextBox: (docId: string, id: string, patch: Partial<TextBox>) => void;
   removeTextBox: (docId: string, id: string) => void;
   clearTextBoxes: (docId: string) => void;
+  addHighlight: (docId: string, mark: HighlightMark) => void;
+  patchHighlight: (docId: string, id: string, patch: Partial<HighlightMark>) => void;
+  removeHighlight: (docId: string, id: string) => void;
+  clearHighlights: (docId: string) => void;
   setSplitMode: (mode: SplitMode) => void;
   setRangeText: (value: string) => void;
   setEveryN: (n: number) => void;
@@ -44,6 +49,7 @@ const INITIAL = {
   activeId: null as string | null,
   selected: {} as Record<string, number[]>,
   textBoxes: {} as Record<string, TextBox[]>,
+  highlights: {} as Record<string, HighlightMark[]>,
   splitMode: "extract" as SplitMode,
   rangeText: "1-3, 4-6",
   everyN: 2,
@@ -60,14 +66,17 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       const docs = [...state.docs, ...incoming];
       const selected = { ...state.selected };
       const textBoxes = { ...state.textBoxes };
+      const highlights = { ...state.highlights };
       for (const doc of incoming) {
         if (!selected[doc.id]) selected[doc.id] = [];
         if (!textBoxes[doc.id]) textBoxes[doc.id] = [];
+        if (!highlights[doc.id]) highlights[doc.id] = [];
       }
       return {
         docs,
         selected,
         textBoxes,
+        highlights,
         activeId: state.activeId ?? incoming[0]?.id ?? null,
       };
     }),
@@ -76,12 +85,15 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       const docs = state.docs.filter((d) => d.id !== id);
       const selected = { ...state.selected };
       const textBoxes = { ...state.textBoxes };
+      const highlights = { ...state.highlights };
       delete selected[id];
       delete textBoxes[id];
+      delete highlights[id];
       return {
         docs,
         selected,
         textBoxes,
+        highlights,
         activeId: state.activeId === id ? (docs[0]?.id ?? null) : state.activeId,
       };
     }),
@@ -179,6 +191,28 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   clearTextBoxes: (docId) =>
     set((state) => ({
       textBoxes: { ...state.textBoxes, [docId]: [] },
+    })),
+  addHighlight: (docId, mark) =>
+    set((state) => ({
+      highlights: { ...state.highlights, [docId]: [...(state.highlights[docId] ?? []), mark] },
+    })),
+  patchHighlight: (docId, id, patch) =>
+    set((state) => ({
+      highlights: {
+        ...state.highlights,
+        [docId]: (state.highlights[docId] ?? []).map((mark) => (mark.id === id ? { ...mark, ...patch } : mark)),
+      },
+    })),
+  removeHighlight: (docId, id) =>
+    set((state) => ({
+      highlights: {
+        ...state.highlights,
+        [docId]: (state.highlights[docId] ?? []).filter((mark) => mark.id !== id),
+      },
+    })),
+  clearHighlights: (docId) =>
+    set((state) => ({
+      highlights: { ...state.highlights, [docId]: [] },
     })),
   setSplitMode: (splitMode) => set({ splitMode }),
   setRangeText: (rangeText) => set({ rangeText }),

@@ -28,12 +28,11 @@ import {
   rotatePage,
   safeFilename,
 } from "@/lib/pdf";
-import { applyTextBoxes, type TextBox, type TextFont } from "@/lib/pdf-text";
+import { applyHighlights, applyTextBoxes, type TextBox, type TextFont } from "@/lib/pdf-text";
 import { cn } from "@/lib/utils";
 import { useActiveDoc, useWorkspace } from "@/store/workspace";
 
 const COMING = [
-  { icon: Highlighter, label: "Highlight" },
   { icon: PenTool, label: "Draw" },
   { icon: ImageIcon, label: "Image" },
   { icon: Stamp, label: "Sign" },
@@ -45,6 +44,7 @@ export function EditorView() {
   const outputName = useWorkspace((s) => s.outputName);
   const busy = useWorkspace((s) => s.busy);
   const textBoxes = useWorkspace((s) => s.textBoxes);
+  const highlights = useWorkspace((s) => s.highlights);
   const setActive = useWorkspace((s) => s.setActive);
   const setOutputName = useWorkspace((s) => s.setOutputName);
   const setBusy = useWorkspace((s) => s.setBusy);
@@ -53,9 +53,15 @@ export function EditorView() {
   const patchTextBox = useWorkspace((s) => s.patchTextBox);
   const removeTextBox = useWorkspace((s) => s.removeTextBox);
   const clearTextBoxes = useWorkspace((s) => s.clearTextBoxes);
+  const addHighlight = useWorkspace((s) => s.addHighlight);
+  const patchHighlight = useWorkspace((s) => s.patchHighlight);
+  const removeHighlight = useWorkspace((s) => s.removeHighlight);
+  const clearHighlights = useWorkspace((s) => s.clearHighlights);
   const [focus, setFocus] = useState(0);
   const [textMode, setTextMode] = useState(false);
+  const [highlightMode, setHighlightMode] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null);
   const [font, setFont] = useState<TextFont>("sans");
   const [size, setSize] = useState(14);
   const [bold, setBold] = useState(false);
@@ -67,7 +73,7 @@ export function EditorView() {
         <DropZone
           multiple={false}
           title="Drop a PDF to edit"
-          hint="Add text boxes, edit existing lines, rotate, and reorder pages. Files never leave this device."
+          hint="Add text, highlight lines, rotate, and reorder pages. Files never leave this device."
         />
         <div className="flex justify-center">
           <Button variant="outline" onClick={() => void addSample("report")}>
@@ -81,14 +87,21 @@ export function EditorView() {
   if (!doc) return null;
   const page = Math.min(focus, Math.max(0, doc.pageCount - 1));
   const boxes = textBoxes[doc.id] ?? [];
+  const marks = highlights[doc.id] ?? [];
   const selected = boxes.find((box) => box.id === selectedId) ?? null;
+  const selectedMark = marks.find((mark) => mark.id === selectedMarkId) ?? null;
 
   async function bake(bytes: Uint8Array) {
-    const current = useWorkspace.getState().textBoxes[doc.id] ?? [];
-    if (current.length === 0) return bytes;
-    const next = await applyTextBoxes(bytes, current);
-    clearTextBoxes(doc.id);
+    const state = useWorkspace.getState();
+    const currentBoxes = state.textBoxes[doc.id] ?? [];
+    const currentMarks = state.highlights[doc.id] ?? [];
+    let next = bytes;
+    if (currentMarks.length) next = await applyHighlights(next, currentMarks);
+    if (currentBoxes.length) next = await applyTextBoxes(next, currentBoxes);
+    if (currentMarks.length) clearHighlights(doc.id);
+    if (currentBoxes.length) clearTextBoxes(doc.id);
     setSelectedId(null);
+    setSelectedMarkId(null);
     return next;
   }
 
@@ -171,11 +184,26 @@ export function EditorView() {
             pressed={textMode}
             onClick={() => {
               setTextMode((on) => !on);
+              setHighlightMode(false);
               setSelectedId(null);
+              setSelectedMarkId(null);
             }}
           >
             <Type />
             Text
+          </ToolButton>
+          <ToolButton
+            label="Highlight text"
+            pressed={highlightMode}
+            onClick={() => {
+              setHighlightMode((on) => !on);
+              setTextMode(false);
+              setSelectedId(null);
+              setSelectedMarkId(null);
+            }}
+          >
+            <Highlighter />
+            Highlight
           </ToolButton>
           <ToolButton
             label="Rotate 90°"
@@ -227,6 +255,25 @@ export function EditorView() {
             </Tooltip>
           ))}
         </div>
+        {highlightMode && (
+          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <p className="text-sm text-muted-foreground sm:flex-1">
+              Click a line to highlight it, or drag to mark a region.
+            </p>
+            {selectedMark && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  removeHighlight(doc.id, selectedMark.id);
+                  setSelectedMarkId(null);
+                }}
+              >
+                <Trash2 />
+                Remove highlight
+              </Button>
+            )}
+          </div>
+        )}
         {textMode && (
           <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
             <p className="text-sm text-muted-foreground sm:flex-1">
@@ -382,8 +429,11 @@ export function EditorView() {
             page={page}
             fallback={doc.thumbs[page]}
             textMode={textMode}
+            highlightMode={highlightMode}
             boxes={boxes}
+            marks={marks}
             selectedId={selectedId}
+            selectedMarkId={selectedMarkId}
             font={font}
             size={size}
             bold={bold}
@@ -395,6 +445,16 @@ export function EditorView() {
               removeTextBox(doc.id, id);
               if (selectedId === id) setSelectedId(null);
             }}
+            onSelectMark={setSelectedMarkId}
+            onAddMark={(mark) => {
+              addHighlight(doc.id, mark);
+              setSelectedMarkId(mark.id);
+            }}
+            onPatchMark={(id, patch) => patchHighlight(doc.id, id, patch)}
+            onRemoveMark={(id) => {
+              removeHighlight(doc.id, id);
+              if (selectedMarkId === id) setSelectedMarkId(null);
+            }}
           />
         </figure>
       </div>
@@ -404,6 +464,9 @@ export function EditorView() {
           Page {page + 1} of {doc.pageCount}
           {boxes.length > 0
             ? ` · ${boxes.length} text change${boxes.length === 1 ? "" : "s"}`
+            : ""}
+          {marks.length > 0
+            ? ` · ${marks.length} highlight${marks.length === 1 ? "" : "s"}`
             : ""}
         </p>
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">

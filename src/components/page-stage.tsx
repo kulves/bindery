@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { GripHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { extractPageLines, type TextBox, type TextFont, type TextLine } from "@/lib/pdf-text";
+import { extractPageLines, type HighlightMark, type TextBox, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
 
 interface PageStageProps {
@@ -9,8 +9,11 @@ interface PageStageProps {
   page: number;
   fallback?: string;
   textMode: boolean;
+  highlightMode: boolean;
   boxes: TextBox[];
+  marks: HighlightMark[];
   selectedId: string | null;
+  selectedMarkId: string | null;
   font: TextFont;
   size: number;
   bold: boolean;
@@ -19,6 +22,10 @@ interface PageStageProps {
   onAdd: (box: TextBox) => void;
   onPatch: (id: string, patch: Partial<TextBox>) => void;
   onRemove: (id: string) => void;
+  onSelectMark: (id: string | null) => void;
+  onAddMark: (mark: HighlightMark) => void;
+  onPatchMark: (id: string, patch: Partial<HighlightMark>) => void;
+  onRemoveMark: (id: string) => void;
 }
 
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
@@ -56,8 +63,11 @@ export function PageStage({
   page,
   fallback,
   textMode,
+  highlightMode,
   boxes,
+  marks,
   selectedId,
+  selectedMarkId,
   font,
   size,
   bold,
@@ -66,11 +76,17 @@ export function PageStage({
   onAdd,
   onPatch,
   onRemove,
+  onSelectMark,
+  onAddMark,
+  onPatchMark,
+  onRemoveMark,
 }: PageStageProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState(fallback ?? "");
   const [lines, setLines] = useState<TextLine[]>([]);
   const drag = useRef<Drag | null>(null);
+  const sweep = useRef<{ nx: number; ny: number } | null>(null);
+  const [draft, setDraft] = useState<{ nx: number; ny: number; nw: number; nh: number } | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -88,7 +104,7 @@ export function PageStage({
   }, [bytes, page, fallback]);
 
   useEffect(() => {
-    if (!textMode) {
+    if (!textMode && !highlightMode) {
       setLines([]);
       return;
     }
@@ -99,9 +115,10 @@ export function PageStage({
     return () => {
       alive = false;
     };
-  }, [bytes, page, textMode]);
+  }, [bytes, page, textMode, highlightMode]);
 
   const pageBoxes = boxes.filter((box) => box.page === page);
+  const pageMarks = marks.filter((mark) => mark.page === page);
   const covered = new Set(
     pageBoxes.map((box) => box.sourceId).filter((id): id is string => Boolean(id)),
   );
@@ -163,6 +180,68 @@ export function PageStage({
       sourceId: line.id,
     };
     onAdd(box);
+  }
+
+  function highlightLine(line: TextLine) {
+    const existing = pageMarks.find(
+      (mark) => Math.abs(mark.nx - line.nx) < 0.01 && Math.abs(mark.ny - line.ny) < 0.01,
+    );
+    if (existing) {
+      onSelectMark(existing.id);
+      return;
+    }
+    const padX = 0.006;
+    const padY = 0.004;
+    onAddMark({
+      id: crypto.randomUUID(),
+      page,
+      nx: clamp(line.nx - padX, 0, 1),
+      ny: clamp(line.ny - padY, 0, 1),
+      nw: Math.min(1 - Math.max(0, line.nx - padX), line.nw + padX * 2),
+      nh: Math.min(1 - Math.max(0, line.ny - padY), Math.max(line.nh + padY * 2, 0.014)),
+    });
+  }
+
+  function onStagePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!highlightMode) return;
+    if (event.target !== event.currentTarget) return;
+    const point = pointFromEvent(event);
+    if (!point) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    sweep.current = point;
+    setDraft({ nx: point.nx, ny: point.ny, nw: 0, nh: 0 });
+    onSelectMark(null);
+  }
+
+  function onStagePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const origin = sweep.current;
+    if (!origin) return;
+    const point = pointFromEvent(event);
+    if (!point) return;
+    const nx = Math.min(origin.nx, point.nx);
+    const ny = Math.min(origin.ny, point.ny);
+    setDraft({
+      nx,
+      ny,
+      nw: Math.abs(point.nx - origin.nx),
+      nh: Math.abs(point.ny - origin.ny),
+    });
+  }
+
+  function onStagePointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const origin = sweep.current;
+    sweep.current = null;
+    setDraft(null);
+    if (!origin) return;
+    const point = pointFromEvent(event);
+    if (!point) return;
+    const nx = Math.min(origin.nx, point.nx);
+    const ny = Math.min(origin.ny, point.ny);
+    const nw = Math.abs(point.nx - origin.nx);
+    const nh = Math.abs(point.ny - origin.ny);
+    if (nw < 0.02 || nh < 0.01) return;
+    onAddMark({ id: crypto.randomUUID(), page, nx, ny, nw, nh });
   }
 
   function onBoxPointerDown(event: ReactPointerEvent<HTMLDivElement>, box: TextBox) {
@@ -245,9 +324,12 @@ export function PageStage({
       role="img"
       aria-label={`Page ${page + 1}`}
       onClick={placeBox}
+      onPointerDown={onStagePointerDown}
+      onPointerMove={onStagePointerMove}
+      onPointerUp={onStagePointerUp}
       className={cn(
         "relative mx-auto max-h-[70vh] w-max max-w-full rounded-md bg-card shadow-[var(--shadow-page)]",
-        textMode ? "cursor-text" : "cursor-default",
+        highlightMode ? "cursor-crosshair" : textMode ? "cursor-text" : "cursor-default",
       )}
     >
       {preview ? (
@@ -261,17 +343,54 @@ export function PageStage({
         <div className="page-skeleton aspect-[8.5/11] h-[70vh] max-h-[70vh] w-auto rounded-md" />
       )}
 
-      {textMode &&
+      {pageMarks.map((mark) => {
+        const selected = mark.id === selectedMarkId;
+        return (
+          <button
+            key={mark.id}
+            type="button"
+            aria-label="Highlight"
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectMark(mark.id);
+            }}
+            className={cn(
+              "absolute bg-mark/50",
+              selected ? "z-10 ring-2 ring-foreground" : "z-0",
+            )}
+            style={{
+              left: `${mark.nx * 100}%`,
+              top: `${mark.ny * 100}%`,
+              width: `${mark.nw * 100}%`,
+              height: `${mark.nh * 100}%`,
+            }}
+          />
+        );
+      })}
+      {draft && draft.nw > 0 && draft.nh > 0 && (
+        <div
+          className="pointer-events-none absolute z-10 bg-mark/40 ring-1 ring-foreground/40"
+          style={{
+            left: `${draft.nx * 100}%`,
+            top: `${draft.ny * 100}%`,
+            width: `${draft.nw * 100}%`,
+            height: `${draft.nh * 100}%`,
+          }}
+        />
+      )}
+
+      {(textMode || highlightMode) &&
         lines.map((line) => {
-          if (covered.has(line.id)) return null;
+          if (textMode && covered.has(line.id)) return null;
           return (
             <button
               key={line.id}
               type="button"
-              title="Edit this text"
+              title={highlightMode ? "Highlight this line" : "Edit this text"}
               onClick={(event) => {
                 event.stopPropagation();
-                editLine(line);
+                if (highlightMode) highlightLine(line);
+                else editLine(line);
               }}
               className="absolute rounded-xs border border-transparent bg-accent/0 hover:border-accent hover:bg-accent/15"
               style={{
@@ -282,7 +401,9 @@ export function PageStage({
                 minHeight: "1.1rem",
               }}
             >
-              <span className="sr-only">Edit “{line.str}”</span>
+              <span className="sr-only">
+                {highlightMode ? "Highlight" : "Edit"} “{line.str}”
+              </span>
             </button>
           );
         })}

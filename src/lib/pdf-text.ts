@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, BlendMode, type PDFFont } from "pdf-lib";
 import { loadPdfjs } from "@/lib/pdf-render";
 
 export type TextFont = "sans" | "serif";
@@ -19,6 +19,15 @@ export interface TextBox {
   sourceId?: string;
 }
 
+export interface HighlightMark {
+  id: string;
+  page: number;
+  nx: number;
+  ny: number;
+  nw: number;
+  nh: number;
+}
+
 export interface TextLine {
   id: string;
   str: string;
@@ -31,6 +40,7 @@ export interface TextLine {
 
 const INK = rgb(0.11, 0.1, 0.09);
 const COVER = rgb(0.98, 0.969, 0.941);
+const MARK = rgb(0.91, 0.77, 0.28);
 
 const WINANSI: Record<string, string> = {
   "\u2018": "'",
@@ -217,6 +227,74 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
   }
 
   return pdf.save();
+}
+
+export async function applyHighlights(bytes: Uint8Array, marks: HighlightMark[]): Promise<Uint8Array> {
+  if (marks.length === 0) return bytes;
+  const pdfjs = await loadPdfjs();
+  const data = new Uint8Array(bytes.byteLength);
+  data.set(bytes);
+  const js = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
+  const pdf = await PDFDocument.load(bytes);
+
+  try {
+    const byPage = new Map<number, HighlightMark[]>();
+    for (const mark of marks) {
+      const list = byPage.get(mark.page) ?? [];
+      list.push(mark);
+      byPage.set(mark.page, list);
+    }
+
+    for (const [pageIndex, pageMarks] of byPage) {
+      const page = pdf.getPages()[pageIndex];
+      const jsPage = await js.getPage(pageIndex + 1);
+      if (!page || !jsPage) continue;
+      const viewport = jsPage.getViewport({ scale: 1 });
+
+      for (const mark of pageMarks) {
+        const rect = visualToPdf(viewport, mark);
+        page.drawRectangle({
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+          color: MARK,
+          opacity: 0.42,
+          blendMode: BlendMode.Multiply,
+        });
+      }
+      jsPage.cleanup();
+    }
+  } finally {
+    await js.destroy();
+  }
+
+  return pdf.save();
+}
+
+function visualToPdf(
+  viewport: { width: number; height: number; convertToPdfPoint: (x: number, y: number) => unknown[] },
+  box: { nx: number; ny: number; nw: number; nh: number },
+) {
+  const corners = [
+    [box.nx, box.ny],
+    [box.nx + box.nw, box.ny],
+    [box.nx, box.ny + box.nh],
+    [box.nx + box.nw, box.ny + box.nh],
+  ].map(([nx, ny]) => {
+    const point = viewport.convertToPdfPoint(nx * viewport.width, ny * viewport.height);
+    return [Number(point[0]), Number(point[1])] as const;
+  });
+  const xs = corners.map((c) => c[0]);
+  const ys = corners.map((c) => c[1]);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return {
+    x,
+    y,
+    width: Math.max(4, Math.max(...xs) - x),
+    height: Math.max(4, Math.max(...ys) - y),
+  };
 }
 
 function pickFace(
