@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, BlendMode, type PDFFont } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, BlendMode, LineCapStyle, type PDFFont } from "pdf-lib";
 import { loadPdfjs } from "@/lib/pdf-render";
 
 export type TextFont = "sans" | "serif";
@@ -26,6 +26,13 @@ export interface HighlightMark {
   ny: number;
   nw: number;
   nh: number;
+}
+
+export interface Stroke {
+  id: string;
+  page: number;
+  points: Array<{ nx: number; ny: number }>;
+  width: number;
 }
 
 export interface TextLine {
@@ -270,6 +277,64 @@ export async function applyHighlights(bytes: Uint8Array, marks: HighlightMark[])
   }
 
   return pdf.save();
+}
+
+export async function applyStrokes(bytes: Uint8Array, strokes: Stroke[]): Promise<Uint8Array> {
+  const pending = strokes.filter((stroke) => stroke.points.length > 0);
+  if (pending.length === 0) return bytes;
+  const pdfjs = await loadPdfjs();
+  const data = new Uint8Array(bytes.byteLength);
+  data.set(bytes);
+  const js = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
+  const pdf = await PDFDocument.load(bytes);
+
+  try {
+    const byPage = new Map<number, Stroke[]>();
+    for (const stroke of pending) {
+      const list = byPage.get(stroke.page) ?? [];
+      list.push(stroke);
+      byPage.set(stroke.page, list);
+    }
+
+    for (const [pageIndex, pageStrokes] of byPage) {
+      const page = pdf.getPages()[pageIndex];
+      const jsPage = await js.getPage(pageIndex + 1);
+      if (!page || !jsPage) continue;
+      const viewport = jsPage.getViewport({ scale: 1 });
+
+      for (const stroke of pageStrokes) {
+        const pts = stroke.points.map((point) => visualPointToPdf(viewport, point.nx, point.ny));
+        if (pts.length === 1 && pts[0]) {
+          pts.push({ x: pts[0].x + 0.4, y: pts[0].y });
+        }
+        const start = pts[0];
+        if (!start) continue;
+        const path = pts
+          .map((pt, index) => `${index === 0 ? "M" : "L"} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`)
+          .join(" ");
+        page.drawSvgPath(path, {
+          borderColor: INK,
+          borderWidth: Math.max(1, stroke.width),
+          borderOpacity: 1,
+          borderLineCap: LineCapStyle.Round,
+        });
+      }
+      jsPage.cleanup();
+    }
+  } finally {
+    await js.destroy();
+  }
+
+  return pdf.save();
+}
+
+function visualPointToPdf(
+  viewport: { width: number; height: number; convertToPdfPoint: (x: number, y: number) => unknown[] },
+  nx: number,
+  ny: number,
+) {
+  const point = viewport.convertToPdfPoint(nx * viewport.width, ny * viewport.height);
+  return { x: Number(point[0]), y: Number(point[1]) };
 }
 
 function visualToPdf(

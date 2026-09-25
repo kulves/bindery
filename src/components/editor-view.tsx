@@ -11,6 +11,7 @@ import {
   Stamp,
   Trash2,
   Type,
+  Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -28,15 +29,20 @@ import {
   rotatePage,
   safeFilename,
 } from "@/lib/pdf";
-import { applyHighlights, applyTextBoxes, type TextBox, type TextFont } from "@/lib/pdf-text";
+import { applyHighlights, applyStrokes, applyTextBoxes, type TextBox, type TextFont } from "@/lib/pdf-text";
 import { cn } from "@/lib/utils";
 import { useActiveDoc, useWorkspace } from "@/store/workspace";
 
 const COMING = [
-  { icon: PenTool, label: "Draw" },
   { icon: ImageIcon, label: "Image" },
   { icon: Stamp, label: "Sign" },
 ];
+
+const PEN = [
+  { id: "fine", label: "Fine", width: 1.8 },
+  { id: "medium", label: "Medium", width: 3.2 },
+  { id: "heavy", label: "Heavy", width: 6 },
+] as const;
 
 export function EditorView() {
   const docs = useWorkspace((s) => s.docs);
@@ -45,6 +51,7 @@ export function EditorView() {
   const busy = useWorkspace((s) => s.busy);
   const textBoxes = useWorkspace((s) => s.textBoxes);
   const highlights = useWorkspace((s) => s.highlights);
+  const strokes = useWorkspace((s) => s.strokes);
   const setActive = useWorkspace((s) => s.setActive);
   const setOutputName = useWorkspace((s) => s.setOutputName);
   const setBusy = useWorkspace((s) => s.setBusy);
@@ -57,15 +64,20 @@ export function EditorView() {
   const patchHighlight = useWorkspace((s) => s.patchHighlight);
   const removeHighlight = useWorkspace((s) => s.removeHighlight);
   const clearHighlights = useWorkspace((s) => s.clearHighlights);
+  const addStroke = useWorkspace((s) => s.addStroke);
+  const undoStroke = useWorkspace((s) => s.undoStroke);
+  const clearStrokes = useWorkspace((s) => s.clearStrokes);
   const [focus, setFocus] = useState(0);
   const [textMode, setTextMode] = useState(false);
   const [highlightMode, setHighlightMode] = useState(false);
+  const [drawMode, setDrawMode] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null);
   const [font, setFont] = useState<TextFont>("sans");
   const [size, setSize] = useState(14);
   const [bold, setBold] = useState(false);
   const [italic, setItalic] = useState(false);
+  const [penWidth, setPenWidth] = useState(3.2);
 
   if (docs.length === 0) {
     return (
@@ -73,7 +85,7 @@ export function EditorView() {
         <DropZone
           multiple={false}
           title="Drop a PDF to edit"
-          hint="Add text, highlight lines, rotate, and reorder pages. Files never leave this device."
+          hint="Add text, highlight, draw, rotate, and reorder pages. Files never leave this device."
         />
         <div className="flex justify-center">
           <Button variant="outline" onClick={() => void addSample("report")}>
@@ -88,6 +100,7 @@ export function EditorView() {
   const page = Math.min(focus, Math.max(0, doc.pageCount - 1));
   const boxes = textBoxes[doc.id] ?? [];
   const marks = highlights[doc.id] ?? [];
+  const ink = strokes[doc.id] ?? [];
   const selected = boxes.find((box) => box.id === selectedId) ?? null;
   const selectedMark = marks.find((mark) => mark.id === selectedMarkId) ?? null;
 
@@ -95,10 +108,13 @@ export function EditorView() {
     const state = useWorkspace.getState();
     const currentBoxes = state.textBoxes[doc.id] ?? [];
     const currentMarks = state.highlights[doc.id] ?? [];
+    const currentInk = state.strokes[doc.id] ?? [];
     let next = bytes;
     if (currentMarks.length) next = await applyHighlights(next, currentMarks);
+    if (currentInk.length) next = await applyStrokes(next, currentInk);
     if (currentBoxes.length) next = await applyTextBoxes(next, currentBoxes);
     if (currentMarks.length) clearHighlights(doc.id);
+    if (currentInk.length) clearStrokes(doc.id);
     if (currentBoxes.length) clearTextBoxes(doc.id);
     setSelectedId(null);
     setSelectedMarkId(null);
@@ -185,6 +201,7 @@ export function EditorView() {
             onClick={() => {
               setTextMode((on) => !on);
               setHighlightMode(false);
+              setDrawMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
             }}
@@ -198,12 +215,27 @@ export function EditorView() {
             onClick={() => {
               setHighlightMode((on) => !on);
               setTextMode(false);
+              setDrawMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
             }}
           >
             <Highlighter />
             Highlight
+          </ToolButton>
+          <ToolButton
+            label="Draw on the page"
+            pressed={drawMode}
+            onClick={() => {
+              setDrawMode((on) => !on);
+              setTextMode(false);
+              setHighlightMode(false);
+              setSelectedId(null);
+              setSelectedMarkId(null);
+            }}
+          >
+            <PenTool />
+            Draw
           </ToolButton>
           <ToolButton
             label="Rotate 90°"
@@ -272,6 +304,34 @@ export function EditorView() {
                 Remove highlight
               </Button>
             )}
+          </div>
+        )}
+        {drawMode && (
+          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <p className="text-sm text-muted-foreground sm:flex-1">
+              Draw on the page. Undo takes back the last stroke.
+            </p>
+            <div className="flex rounded-full bg-card p-1">
+              {PEN.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setPenWidth(item.width)}
+                  className={cn(
+                    "h-11 rounded-full px-3 text-sm",
+                    penWidth === item.width
+                      ? "bg-primary text-primary-foreground"
+                      : "text-foreground hover:bg-muted",
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <Button variant="ghost" disabled={ink.length === 0} onClick={() => undoStroke(doc.id)}>
+              <Undo2 />
+              Undo
+            </Button>
           </div>
         )}
         {textMode && (
@@ -430,14 +490,17 @@ export function EditorView() {
             fallback={doc.thumbs[page]}
             textMode={textMode}
             highlightMode={highlightMode}
+            drawMode={drawMode}
             boxes={boxes}
             marks={marks}
+            strokes={ink}
             selectedId={selectedId}
             selectedMarkId={selectedMarkId}
             font={font}
             size={size}
             bold={bold}
             italic={italic}
+            penWidth={penWidth}
             onSelect={setSelectedId}
             onAdd={onAddBox}
             onPatch={(id, patch) => patchTextBox(doc.id, id, patch)}
@@ -455,6 +518,7 @@ export function EditorView() {
               removeHighlight(doc.id, id);
               if (selectedMarkId === id) setSelectedMarkId(null);
             }}
+            onAddStroke={(stroke) => addStroke(doc.id, stroke)}
           />
         </figure>
       </div>
@@ -468,6 +532,7 @@ export function EditorView() {
           {marks.length > 0
             ? ` · ${marks.length} highlight${marks.length === 1 ? "" : "s"}`
             : ""}
+          {ink.length > 0 ? ` · ${ink.length} stroke${ink.length === 1 ? "" : "s"}` : ""}
         </p>
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
           File name

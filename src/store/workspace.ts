@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { PdfDoc, SplitMode, ToolId } from "@/lib/pdf";
-import type { HighlightMark, TextBox } from "@/lib/pdf-text";
+import type { HighlightMark, Stroke, TextBox } from "@/lib/pdf-text";
 
 interface WorkspaceState {
   tool: ToolId;
@@ -9,6 +9,7 @@ interface WorkspaceState {
   selected: Record<string, number[]>;
   textBoxes: Record<string, TextBox[]>;
   highlights: Record<string, HighlightMark[]>;
+  strokes: Record<string, Stroke[]>;
   splitMode: SplitMode;
   rangeText: string;
   everyN: number;
@@ -35,6 +36,9 @@ interface WorkspaceState {
   patchHighlight: (docId: string, id: string, patch: Partial<HighlightMark>) => void;
   removeHighlight: (docId: string, id: string) => void;
   clearHighlights: (docId: string) => void;
+  addStroke: (docId: string, stroke: Stroke) => void;
+  undoStroke: (docId: string) => void;
+  clearStrokes: (docId: string) => void;
   setSplitMode: (mode: SplitMode) => void;
   setRangeText: (value: string) => void;
   setEveryN: (n: number) => void;
@@ -50,6 +54,7 @@ const INITIAL = {
   selected: {} as Record<string, number[]>,
   textBoxes: {} as Record<string, TextBox[]>,
   highlights: {} as Record<string, HighlightMark[]>,
+  strokes: {} as Record<string, Stroke[]>,
   splitMode: "extract" as SplitMode,
   rangeText: "1-3, 4-6",
   everyN: 2,
@@ -67,16 +72,19 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       const selected = { ...state.selected };
       const textBoxes = { ...state.textBoxes };
       const highlights = { ...state.highlights };
+      const strokes = { ...state.strokes };
       for (const doc of incoming) {
         if (!selected[doc.id]) selected[doc.id] = [];
         if (!textBoxes[doc.id]) textBoxes[doc.id] = [];
         if (!highlights[doc.id]) highlights[doc.id] = [];
+        if (!strokes[doc.id]) strokes[doc.id] = [];
       }
       return {
         docs,
         selected,
         textBoxes,
         highlights,
+        strokes,
         activeId: state.activeId ?? incoming[0]?.id ?? null,
       };
     }),
@@ -86,14 +94,17 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       const selected = { ...state.selected };
       const textBoxes = { ...state.textBoxes };
       const highlights = { ...state.highlights };
+      const strokes = { ...state.strokes };
       delete selected[id];
       delete textBoxes[id];
       delete highlights[id];
+      delete strokes[id];
       return {
         docs,
         selected,
         textBoxes,
         highlights,
+        strokes,
         activeId: state.activeId === id ? (docs[0]?.id ?? null) : state.activeId,
       };
     }),
@@ -213,6 +224,18 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   clearHighlights: (docId) =>
     set((state) => ({
       highlights: { ...state.highlights, [docId]: [] },
+    })),
+  addStroke: (docId, stroke) =>
+    set((state) => ({
+      strokes: { ...state.strokes, [docId]: [...(state.strokes[docId] ?? []), stroke] },
+    })),
+  undoStroke: (docId) =>
+    set((state) => ({
+      strokes: { ...state.strokes, [docId]: (state.strokes[docId] ?? []).slice(0, -1) },
+    })),
+  clearStrokes: (docId) =>
+    set((state) => ({
+      strokes: { ...state.strokes, [docId]: [] },
     })),
   setSplitMode: (splitMode) => set({ splitMode }),
   setRangeText: (rangeText) => set({ rangeText }),

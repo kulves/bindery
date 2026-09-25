@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { GripHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { extractPageLines, type HighlightMark, type TextBox, type TextFont, type TextLine } from "@/lib/pdf-text";
+import { extractPageLines, type HighlightMark, type Stroke, type TextBox, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
 
 interface PageStageProps {
@@ -10,14 +10,17 @@ interface PageStageProps {
   fallback?: string;
   textMode: boolean;
   highlightMode: boolean;
+  drawMode: boolean;
   boxes: TextBox[];
   marks: HighlightMark[];
+  strokes: Stroke[];
   selectedId: string | null;
   selectedMarkId: string | null;
   font: TextFont;
   size: number;
   bold: boolean;
   italic: boolean;
+  penWidth: number;
   onSelect: (id: string | null) => void;
   onAdd: (box: TextBox) => void;
   onPatch: (id: string, patch: Partial<TextBox>) => void;
@@ -26,6 +29,7 @@ interface PageStageProps {
   onAddMark: (mark: HighlightMark) => void;
   onPatchMark: (id: string, patch: Partial<HighlightMark>) => void;
   onRemoveMark: (id: string) => void;
+  onAddStroke: (stroke: Stroke) => void;
 }
 
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
@@ -64,14 +68,17 @@ export function PageStage({
   fallback,
   textMode,
   highlightMode,
+  drawMode,
   boxes,
   marks,
+  strokes,
   selectedId,
   selectedMarkId,
   font,
   size,
   bold,
   italic,
+  penWidth,
   onSelect,
   onAdd,
   onPatch,
@@ -80,6 +87,7 @@ export function PageStage({
   onAddMark,
   onPatchMark,
   onRemoveMark,
+  onAddStroke,
 }: PageStageProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState(fallback ?? "");
@@ -87,6 +95,8 @@ export function PageStage({
   const drag = useRef<Drag | null>(null);
   const sweep = useRef<{ nx: number; ny: number } | null>(null);
   const [draft, setDraft] = useState<{ nx: number; ny: number; nw: number; nh: number } | null>(null);
+  const liveStroke = useRef<Array<{ nx: number; ny: number }>>([]);
+  const [livePoints, setLivePoints] = useState<Array<{ nx: number; ny: number }>>([]);
 
   useEffect(() => {
     let alive = true;
@@ -119,6 +129,7 @@ export function PageStage({
 
   const pageBoxes = boxes.filter((box) => box.page === page);
   const pageMarks = marks.filter((mark) => mark.page === page);
+  const pageStrokes = strokes.filter((stroke) => stroke.page === page);
   const covered = new Set(
     pageBoxes.map((box) => box.sourceId).filter((id): id is string => Boolean(id)),
   );
@@ -244,6 +255,34 @@ export function PageStage({
     onAddMark({ id: crypto.randomUUID(), page, nx, ny, nw, nh });
   }
 
+  function onDrawPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+    if (!drawMode) return;
+    const point = pointFromEvent(event);
+    if (!point) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    liveStroke.current = [point];
+    setLivePoints([point]);
+  }
+
+  function onDrawPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    if (!drawMode || liveStroke.current.length === 0) return;
+    const point = pointFromEvent(event);
+    if (!point) return;
+    const last = liveStroke.current[liveStroke.current.length - 1];
+    if (last && Math.hypot(point.nx - last.nx, point.ny - last.ny) < 0.003) return;
+    liveStroke.current = [...liveStroke.current, point];
+    setLivePoints(liveStroke.current);
+  }
+
+  function onDrawPointerUp() {
+    const points = liveStroke.current;
+    liveStroke.current = [];
+    setLivePoints([]);
+    if (points.length === 0) return;
+    onAddStroke({ id: crypto.randomUUID(), page, points, width: penWidth });
+  }
+
   function onBoxPointerDown(event: ReactPointerEvent<HTMLDivElement>, box: TextBox) {
     if (!textMode) return;
     if ((event.target as HTMLElement).closest("[data-handle],[data-move]")) return;
@@ -329,7 +368,7 @@ export function PageStage({
       onPointerUp={onStagePointerUp}
       className={cn(
         "relative mx-auto max-h-[70vh] w-max max-w-full rounded-md bg-card shadow-[var(--shadow-page)]",
-        highlightMode ? "cursor-crosshair" : textMode ? "cursor-text" : "cursor-default",
+        highlightMode ? "cursor-crosshair" : drawMode ? "cursor-crosshair" : textMode ? "cursor-text" : "cursor-default",
       )}
     >
       {preview ? (
@@ -407,6 +446,43 @@ export function PageStage({
             </button>
           );
         })}
+
+      <svg
+        className={cn(
+          "absolute inset-0 size-full text-foreground",
+          drawMode ? "z-20 touch-none" : "pointer-events-none",
+        )}
+        viewBox="0 0 1 1"
+        preserveAspectRatio="none"
+        aria-hidden={!drawMode}
+        onPointerDown={onDrawPointerDown}
+        onPointerMove={onDrawPointerMove}
+        onPointerUp={onDrawPointerUp}
+      >
+        {pageStrokes.map((stroke) => (
+          <path
+            key={stroke.id}
+            d={pointsToPath(stroke.points)}
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            strokeWidth={Math.max(2, stroke.width)}
+          />
+        ))}
+        {livePoints.length > 0 && (
+          <path
+            d={pointsToPath(livePoints)}
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+            strokeWidth={Math.max(2, penWidth)}
+          />
+        )}
+      </svg>
 
       {pageBoxes.map((box) => {
         const selected = box.id === selectedId;
@@ -546,6 +622,14 @@ function resizeBox(
     nw: Math.max(MIN_W, nw),
     nh: Math.max(MIN_H, nh),
   };
+}
+
+function pointsToPath(points: Array<{ nx: number; ny: number }>) {
+  if (points.length === 0) return "";
+  if (points.length === 1 && points[0]) {
+    return `M ${points[0].nx} ${points[0].ny} L ${points[0].nx + 0.0008} ${points[0].ny}`;
+  }
+  return points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.nx} ${point.ny}`).join(" ");
 }
 
 function clamp(n: number, min: number, max: number) {
