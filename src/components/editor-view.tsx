@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
   Bold,
   ChevronDown,
@@ -29,14 +29,11 @@ import {
   rotatePage,
   safeFilename,
 } from "@/lib/pdf";
-import { applyHighlights, applyStrokes, applyTextBoxes, type TextBox, type TextFont } from "@/lib/pdf-text";
+import { applyHighlights, applySignatures, applyStrokes, applyTextBoxes, type TextBox, type TextFont } from "@/lib/pdf-text";
 import { cn } from "@/lib/utils";
 import { useActiveDoc, useWorkspace } from "@/store/workspace";
 
-const COMING = [
-  { icon: ImageIcon, label: "Image" },
-  { icon: Stamp, label: "Sign" },
-];
+const COMING = [{ icon: ImageIcon, label: "Image" }];
 
 const PEN = [
   { id: "fine", label: "Fine", width: 1.8 },
@@ -52,6 +49,7 @@ export function EditorView() {
   const textBoxes = useWorkspace((s) => s.textBoxes);
   const highlights = useWorkspace((s) => s.highlights);
   const strokes = useWorkspace((s) => s.strokes);
+  const stamps = useWorkspace((s) => s.stamps);
   const setActive = useWorkspace((s) => s.setActive);
   const setOutputName = useWorkspace((s) => s.setOutputName);
   const setBusy = useWorkspace((s) => s.setBusy);
@@ -67,10 +65,15 @@ export function EditorView() {
   const addStroke = useWorkspace((s) => s.addStroke);
   const undoStroke = useWorkspace((s) => s.undoStroke);
   const clearStrokes = useWorkspace((s) => s.clearStrokes);
+  const addStamp = useWorkspace((s) => s.addStamp);
+  const patchStamp = useWorkspace((s) => s.patchStamp);
+  const removeStamp = useWorkspace((s) => s.removeStamp);
+  const clearStamps = useWorkspace((s) => s.clearStamps);
   const [focus, setFocus] = useState(0);
   const [textMode, setTextMode] = useState(false);
   const [highlightMode, setHighlightMode] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
+  const [signMode, setSignMode] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null);
   const [font, setFont] = useState<TextFont>("sans");
@@ -78,6 +81,9 @@ export function EditorView() {
   const [bold, setBold] = useState(false);
   const [italic, setItalic] = useState(false);
   const [penWidth, setPenWidth] = useState(3.2);
+  const [signPaths, setSignPaths] = useState<Array<Array<{ nx: number; ny: number }>>>([]);
+  const [signName, setSignName] = useState("");
+  const [selectedStampId, setSelectedStampId] = useState<string | null>(null);
 
   if (docs.length === 0) {
     return (
@@ -85,7 +91,7 @@ export function EditorView() {
         <DropZone
           multiple={false}
           title="Drop a PDF to edit"
-          hint="Add text, highlight, draw, rotate, and reorder pages. Files never leave this device."
+          hint="Add text, highlight, draw, sign, rotate, and reorder pages. Files never leave this device."
         />
         <div className="flex justify-center">
           <Button variant="outline" onClick={() => void addSample("report")}>
@@ -101,23 +107,34 @@ export function EditorView() {
   const boxes = textBoxes[doc.id] ?? [];
   const marks = highlights[doc.id] ?? [];
   const ink = strokes[doc.id] ?? [];
+  const signs = stamps[doc.id] ?? [];
   const selected = boxes.find((box) => box.id === selectedId) ?? null;
   const selectedMark = marks.find((mark) => mark.id === selectedMarkId) ?? null;
+  const selectedStamp = signs.find((stamp) => stamp.id === selectedStampId) ?? null;
+  const signature = signName.trim()
+    ? { kind: "type" as const, paths: [] as Array<Array<{ nx: number; ny: number }>>, text: signName.trim() }
+    : signPaths.length > 0
+      ? { kind: "draw" as const, paths: signPaths, text: "" }
+      : null;
 
   async function bake(bytes: Uint8Array) {
     const state = useWorkspace.getState();
     const currentBoxes = state.textBoxes[doc.id] ?? [];
     const currentMarks = state.highlights[doc.id] ?? [];
     const currentInk = state.strokes[doc.id] ?? [];
+    const currentStamps = state.stamps[doc.id] ?? [];
     let next = bytes;
     if (currentMarks.length) next = await applyHighlights(next, currentMarks);
     if (currentInk.length) next = await applyStrokes(next, currentInk);
+    if (currentStamps.length) next = await applySignatures(next, currentStamps);
     if (currentBoxes.length) next = await applyTextBoxes(next, currentBoxes);
     if (currentMarks.length) clearHighlights(doc.id);
     if (currentInk.length) clearStrokes(doc.id);
+    if (currentStamps.length) clearStamps(doc.id);
     if (currentBoxes.length) clearTextBoxes(doc.id);
     setSelectedId(null);
     setSelectedMarkId(null);
+    setSelectedStampId(null);
     return next;
   }
 
@@ -202,8 +219,10 @@ export function EditorView() {
               setTextMode((on) => !on);
               setHighlightMode(false);
               setDrawMode(false);
+              setSignMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
+              setSelectedStampId(null);
             }}
           >
             <Type />
@@ -216,8 +235,10 @@ export function EditorView() {
               setHighlightMode((on) => !on);
               setTextMode(false);
               setDrawMode(false);
+              setSignMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
+              setSelectedStampId(null);
             }}
           >
             <Highlighter />
@@ -230,12 +251,30 @@ export function EditorView() {
               setDrawMode((on) => !on);
               setTextMode(false);
               setHighlightMode(false);
+              setSignMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
+              setSelectedStampId(null);
             }}
           >
             <PenTool />
             Draw
+          </ToolButton>
+          <ToolButton
+            label="Add a signature"
+            pressed={signMode}
+            onClick={() => {
+              setSignMode((on) => !on);
+              setTextMode(false);
+              setHighlightMode(false);
+              setDrawMode(false);
+              setSelectedId(null);
+              setSelectedMarkId(null);
+              setSelectedStampId(null);
+            }}
+          >
+            <Stamp />
+            Sign
           </ToolButton>
           <ToolButton
             label="Rotate 90°"
@@ -332,6 +371,52 @@ export function EditorView() {
               <Undo2 />
               Undo
             </Button>
+          </div>
+        )}
+        {signMode && (
+          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3">
+            <p className="text-sm text-muted-foreground">
+              {signature
+                ? "Click the page to stamp your signature. Drag the grip to move it."
+                : "Draw your name in the pad, or type it, then click the page."}
+            </p>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+              <SignPad paths={signPaths} onChange={setSignPaths} />
+              <div className="flex min-w-0 flex-1 flex-col gap-3">
+                <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+                  Or type a name
+                  <Input
+                    value={signName}
+                    placeholder="Jane Doe"
+                    aria-label="Typed signature"
+                    onChange={(event) => setSignName(event.target.value)}
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setSignPaths([]);
+                      setSignName("");
+                    }}
+                  >
+                    Clear pad
+                  </Button>
+                  {selectedStamp && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        removeStamp(doc.id, selectedStamp.id);
+                        setSelectedStampId(null);
+                      }}
+                    >
+                      <Trash2 />
+                      Remove stamp
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
         {textMode && (
@@ -501,6 +586,7 @@ export function EditorView() {
             bold={bold}
             italic={italic}
             penWidth={penWidth}
+            signature={signature}
             onSelect={setSelectedId}
             onAdd={onAddBox}
             onPatch={(id, patch) => patchTextBox(doc.id, id, patch)}
@@ -519,6 +605,19 @@ export function EditorView() {
               if (selectedMarkId === id) setSelectedMarkId(null);
             }}
             onAddStroke={(stroke) => addStroke(doc.id, stroke)}
+            signMode={signMode}
+            stamps={signs}
+            selectedStampId={selectedStampId}
+            onSelectStamp={setSelectedStampId}
+            onAddStamp={(stamp) => {
+              addStamp(doc.id, stamp);
+              setSelectedStampId(stamp.id);
+            }}
+            onPatchStamp={(id, patch) => patchStamp(doc.id, id, patch)}
+            onRemoveStamp={(id) => {
+              removeStamp(doc.id, id);
+              if (selectedStampId === id) setSelectedStampId(null);
+            }}
           />
         </figure>
       </div>
@@ -533,6 +632,9 @@ export function EditorView() {
             ? ` · ${marks.length} highlight${marks.length === 1 ? "" : "s"}`
             : ""}
           {ink.length > 0 ? ` · ${ink.length} stroke${ink.length === 1 ? "" : "s"}` : ""}
+          {signs.length > 0
+            ? ` · ${signs.length} signature${signs.length === 1 ? "" : "s"}`
+            : ""}
         </p>
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
           File name
@@ -574,5 +676,86 @@ function ToolButton({
     >
       {children}
     </Button>
+  );
+}
+
+function SignPad({
+  paths,
+  onChange,
+}: {
+  paths: Array<Array<{ nx: number; ny: number }>>;
+  onChange: (paths: Array<Array<{ nx: number; ny: number }>>) => void;
+}) {
+  const live = useRef<Array<{ nx: number; ny: number }>>([]);
+  const [draft, setDraft] = useState<Array<{ nx: number; ny: number }>>([]);
+
+  function pointFromEvent(event: ReactPointerEvent<SVGSVGElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return null;
+    return {
+      nx: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+      ny: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+    };
+  }
+
+  function onPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
+    const point = pointFromEvent(event);
+    if (!point) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    live.current = [point];
+    setDraft([point]);
+  }
+
+  function onPointerMove(event: ReactPointerEvent<SVGSVGElement>) {
+    if (live.current.length === 0) return;
+    const point = pointFromEvent(event);
+    if (!point) return;
+    const last = live.current[live.current.length - 1];
+    if (last && Math.hypot(point.nx - last.nx, point.ny - last.ny) < 0.008) return;
+    live.current = [...live.current, point];
+    setDraft(live.current);
+  }
+
+  function onPointerUp() {
+    const next = live.current;
+    live.current = [];
+    setDraft([]);
+    if (next.length === 0) return;
+    onChange([...paths, next]);
+  }
+
+  function pathD(points: Array<{ nx: number; ny: number }>) {
+    if (points.length === 0) return "";
+    if (points.length === 1 && points[0]) {
+      return `M ${points[0].nx} ${points[0].ny} L ${points[0].nx + 0.002} ${points[0].ny}`;
+    }
+    return points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.nx} ${point.ny}`).join(" ");
+  }
+
+  return (
+    <svg
+      aria-label="Signature pad"
+      className="h-28 w-full max-w-md touch-none rounded-md bg-card text-foreground shadow-[var(--shadow-border)]"
+      viewBox="0 0 1 1"
+      preserveAspectRatio="none"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
+      <line x1="0.06" y1="0.72" x2="0.94" y2="0.72" stroke="currentColor" strokeOpacity="0.2" strokeWidth="0.012" />
+      {[...paths, draft].map((path, index) => (
+        <path
+          key={index}
+          d={pathD(path)}
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+          strokeWidth="2"
+        />
+      ))}
+    </svg>
   );
 }

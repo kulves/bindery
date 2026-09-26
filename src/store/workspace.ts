@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { PdfDoc, SplitMode, ToolId } from "@/lib/pdf";
-import type { HighlightMark, Stroke, TextBox } from "@/lib/pdf-text";
+import type { HighlightMark, SignatureStamp, Stroke, TextBox } from "@/lib/pdf-text";
 
 interface WorkspaceState {
   tool: ToolId;
@@ -10,6 +10,7 @@ interface WorkspaceState {
   textBoxes: Record<string, TextBox[]>;
   highlights: Record<string, HighlightMark[]>;
   strokes: Record<string, Stroke[]>;
+  stamps: Record<string, SignatureStamp[]>;
   splitMode: SplitMode;
   rangeText: string;
   everyN: number;
@@ -39,6 +40,10 @@ interface WorkspaceState {
   addStroke: (docId: string, stroke: Stroke) => void;
   undoStroke: (docId: string) => void;
   clearStrokes: (docId: string) => void;
+  addStamp: (docId: string, stamp: SignatureStamp) => void;
+  patchStamp: (docId: string, id: string, patch: Partial<SignatureStamp>) => void;
+  removeStamp: (docId: string, id: string) => void;
+  clearStamps: (docId: string) => void;
   setSplitMode: (mode: SplitMode) => void;
   setRangeText: (value: string) => void;
   setEveryN: (n: number) => void;
@@ -55,6 +60,7 @@ const INITIAL = {
   textBoxes: {} as Record<string, TextBox[]>,
   highlights: {} as Record<string, HighlightMark[]>,
   strokes: {} as Record<string, Stroke[]>,
+  stamps: {} as Record<string, SignatureStamp[]>,
   splitMode: "extract" as SplitMode,
   rangeText: "1-3, 4-6",
   everyN: 2,
@@ -73,11 +79,13 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       const textBoxes = { ...state.textBoxes };
       const highlights = { ...state.highlights };
       const strokes = { ...state.strokes };
+      const stamps = { ...state.stamps };
       for (const doc of incoming) {
         if (!selected[doc.id]) selected[doc.id] = [];
         if (!textBoxes[doc.id]) textBoxes[doc.id] = [];
         if (!highlights[doc.id]) highlights[doc.id] = [];
         if (!strokes[doc.id]) strokes[doc.id] = [];
+        if (!stamps[doc.id]) stamps[doc.id] = [];
       }
       return {
         docs,
@@ -85,6 +93,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
         textBoxes,
         highlights,
         strokes,
+        stamps,
         activeId: state.activeId ?? incoming[0]?.id ?? null,
       };
     }),
@@ -95,16 +104,19 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       const textBoxes = { ...state.textBoxes };
       const highlights = { ...state.highlights };
       const strokes = { ...state.strokes };
+      const stamps = { ...state.stamps };
       delete selected[id];
       delete textBoxes[id];
       delete highlights[id];
       delete strokes[id];
+      delete stamps[id];
       return {
         docs,
         selected,
         textBoxes,
         highlights,
         strokes,
+        stamps,
         activeId: state.activeId === id ? (docs[0]?.id ?? null) : state.activeId,
       };
     }),
@@ -236,6 +248,28 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   clearStrokes: (docId) =>
     set((state) => ({
       strokes: { ...state.strokes, [docId]: [] },
+    })),
+  addStamp: (docId, stamp) =>
+    set((state) => ({
+      stamps: { ...state.stamps, [docId]: [...(state.stamps[docId] ?? []), stamp] },
+    })),
+  patchStamp: (docId, id, patch) =>
+    set((state) => ({
+      stamps: {
+        ...state.stamps,
+        [docId]: (state.stamps[docId] ?? []).map((stamp) => (stamp.id === id ? { ...stamp, ...patch } : stamp)),
+      },
+    })),
+  removeStamp: (docId, id) =>
+    set((state) => ({
+      stamps: {
+        ...state.stamps,
+        [docId]: (state.stamps[docId] ?? []).filter((stamp) => stamp.id !== id),
+      },
+    })),
+  clearStamps: (docId) =>
+    set((state) => ({
+      stamps: { ...state.stamps, [docId]: [] },
     })),
   setSplitMode: (splitMode) => set({ splitMode }),
   setRangeText: (rangeText) => set({ rangeText }),

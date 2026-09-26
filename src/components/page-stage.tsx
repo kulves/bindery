@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { GripHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { extractPageLines, type HighlightMark, type Stroke, type TextBox, type TextFont, type TextLine } from "@/lib/pdf-text";
+import { extractPageLines, type HighlightMark, type SignatureStamp, type Stroke, type TextBox, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
 
 interface PageStageProps {
@@ -11,16 +11,20 @@ interface PageStageProps {
   textMode: boolean;
   highlightMode: boolean;
   drawMode: boolean;
+  signMode: boolean;
   boxes: TextBox[];
   marks: HighlightMark[];
   strokes: Stroke[];
+  stamps: SignatureStamp[];
   selectedId: string | null;
   selectedMarkId: string | null;
+  selectedStampId: string | null;
   font: TextFont;
   size: number;
   bold: boolean;
   italic: boolean;
   penWidth: number;
+  signature: { kind: "draw" | "type"; paths: Array<Array<{ nx: number; ny: number }>>; text: string } | null;
   onSelect: (id: string | null) => void;
   onAdd: (box: TextBox) => void;
   onPatch: (id: string, patch: Partial<TextBox>) => void;
@@ -30,14 +34,19 @@ interface PageStageProps {
   onPatchMark: (id: string, patch: Partial<HighlightMark>) => void;
   onRemoveMark: (id: string) => void;
   onAddStroke: (stroke: Stroke) => void;
+  onSelectStamp: (id: string | null) => void;
+  onAddStamp: (stamp: SignatureStamp) => void;
+  onPatchStamp: (id: string, patch: Partial<SignatureStamp>) => void;
+  onRemoveStamp: (id: string) => void;
 }
 
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 type Drag =
-  | { kind: "move"; id: string; ox: number; oy: number; nx: number; ny: number; dragging: boolean }
+  | { kind: "move"; target: "box" | "stamp"; id: string; ox: number; oy: number; nx: number; ny: number; dragging: boolean }
   | {
       kind: "resize";
+      target: "box" | "stamp";
       id: string;
       handle: Handle;
       ox: number;
@@ -69,16 +78,20 @@ export function PageStage({
   textMode,
   highlightMode,
   drawMode,
+  signMode,
   boxes,
   marks,
   strokes,
+  stamps,
   selectedId,
   selectedMarkId,
+  selectedStampId,
   font,
   size,
   bold,
   italic,
   penWidth,
+  signature,
   onSelect,
   onAdd,
   onPatch,
@@ -88,6 +101,10 @@ export function PageStage({
   onPatchMark,
   onRemoveMark,
   onAddStroke,
+  onSelectStamp,
+  onAddStamp,
+  onPatchStamp,
+  onRemoveStamp,
 }: PageStageProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState(fallback ?? "");
@@ -130,6 +147,7 @@ export function PageStage({
   const pageBoxes = boxes.filter((box) => box.page === page);
   const pageMarks = marks.filter((mark) => mark.page === page);
   const pageStrokes = strokes.filter((stroke) => stroke.page === page);
+  const pageStamps = stamps.filter((stamp) => stamp.page === page);
   const covered = new Set(
     pageBoxes.map((box) => box.sourceId).filter((id): id is string => Boolean(id)),
   );
@@ -144,10 +162,14 @@ export function PageStage({
   }
 
   function placeBox(event: React.MouseEvent<HTMLDivElement>) {
-    if (!textMode) return;
     if (event.target !== event.currentTarget) return;
     const point = pointFromEvent(event);
     if (!point) return;
+    if (signMode) {
+      placeStamp(point);
+      return;
+    }
+    if (!textMode) return;
     const nh = Math.max(0.1, (size * 3.2) / 792);
     const nw = 0.42;
     const box: TextBox = {
@@ -165,6 +187,23 @@ export function PageStage({
       replace: false,
     };
     onAdd(box);
+  }
+
+  function placeStamp(point: { nx: number; ny: number }) {
+    if (!signature) return;
+    const nw = 0.34;
+    const nh = 0.1;
+    onAddStamp({
+      id: crypto.randomUUID(),
+      page,
+      nx: Math.min(point.nx, 1 - nw),
+      ny: Math.min(point.ny, 1 - nh),
+      nw,
+      nh,
+      kind: signature.kind,
+      paths: signature.paths,
+      text: signature.text,
+    });
   }
 
   function editLine(line: TextLine) {
@@ -295,6 +334,7 @@ export function PageStage({
   function beginMove(event: ReactPointerEvent, box: TextBox) {
     drag.current = {
       kind: "move",
+      target: "box",
       id: box.id,
       ox: event.clientX,
       oy: event.clientY,
@@ -319,6 +359,7 @@ export function PageStage({
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = {
       kind: "resize",
+      target: "box",
       id: box.id,
       handle,
       ox: event.clientX,
@@ -331,6 +372,48 @@ export function PageStage({
     onSelect(box.id);
   }
 
+  function onStampPointerDown(event: ReactPointerEvent<HTMLDivElement>, stamp: SignatureStamp) {
+    if (!signMode) return;
+    if ((event.target as HTMLElement).closest("[data-handle],[data-move]")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = {
+      kind: "move",
+      target: "stamp",
+      id: stamp.id,
+      ox: event.clientX,
+      oy: event.clientY,
+      nx: stamp.nx,
+      ny: stamp.ny,
+      dragging: false,
+    };
+    onSelectStamp(stamp.id);
+  }
+
+  function onStampHandlePointerDown(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    stamp: SignatureStamp,
+    handle: Handle,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = {
+      kind: "resize",
+      target: "stamp",
+      id: stamp.id,
+      handle,
+      ox: event.clientX,
+      oy: event.clientY,
+      nx: stamp.nx,
+      ny: stamp.ny,
+      nw: stamp.nw,
+      nh: stamp.nh,
+    };
+    onSelectStamp(stamp.id);
+  }
+
   function onDragMove(event: ReactPointerEvent) {
     const active = drag.current;
     const rect = stageRef.current?.getBoundingClientRect();
@@ -338,6 +421,18 @@ export function PageStage({
     const dx = (event.clientX - active.ox) / rect.width;
     const dy = (event.clientY - active.oy) / rect.height;
     if (active.kind === "move") {
+      if (active.target === "stamp") {
+        const stamp = pageStamps.find((item) => item.id === active.id);
+        if (!stamp) return;
+        const pixels = Math.hypot(event.clientX - active.ox, event.clientY - active.oy);
+        if (!active.dragging && pixels < 6) return;
+        active.dragging = true;
+        onPatchStamp(active.id, {
+          nx: clamp(active.nx + dx, 0, 1 - stamp.nw),
+          ny: clamp(active.ny + dy, 0, 1 - stamp.nh),
+        });
+        return;
+      }
       const box = pageBoxes.find((item) => item.id === active.id);
       if (!box) return;
       const pixels = Math.hypot(event.clientX - active.ox, event.clientY - active.oy);
@@ -350,6 +445,10 @@ export function PageStage({
       return;
     }
     const next = resizeBox(active, dx, dy);
+    if (active.target === "stamp") {
+      onPatchStamp(active.id, { nx: next.nx, ny: next.ny, nw: next.nw, nh: next.nh });
+      return;
+    }
     onPatch(active.id, { nx: next.nx, ny: next.ny, nw: next.nw, nh: next.nh });
   }
 
@@ -368,7 +467,11 @@ export function PageStage({
       onPointerUp={onStagePointerUp}
       className={cn(
         "relative mx-auto max-h-[70vh] w-max max-w-full rounded-md bg-card shadow-[var(--shadow-page)]",
-        highlightMode ? "cursor-crosshair" : drawMode ? "cursor-crosshair" : textMode ? "cursor-text" : "cursor-default",
+        highlightMode || signMode || drawMode
+          ? "cursor-crosshair"
+          : textMode
+            ? "cursor-text"
+            : "cursor-default",
       )}
     >
       {preview ? (
@@ -483,6 +586,98 @@ export function PageStage({
           />
         )}
       </svg>
+
+      {pageStamps.map((stamp) => {
+        const selected = stamp.id === selectedStampId;
+        return (
+          <div
+            key={stamp.id}
+            onPointerDown={(event) => onStampPointerDown(event, stamp)}
+            onPointerMove={onDragMove}
+            onPointerUp={onDragUp}
+            onClick={(event) => event.stopPropagation()}
+            className={cn(
+              "absolute bg-card/40",
+              selected ? "z-10 ring-2 ring-foreground" : "ring-1 ring-accent/40",
+            )}
+            style={{
+              left: `${stamp.nx * 100}%`,
+              top: `${stamp.ny * 100}%`,
+              width: `${stamp.nw * 100}%`,
+              height: `${stamp.nh * 100}%`,
+            }}
+          >
+            {stamp.kind === "type" ? (
+              <p className="flex size-full items-center justify-center px-2 font-display text-lg italic leading-none">
+                {stamp.text}
+              </p>
+            ) : (
+              <svg className="size-full text-foreground" viewBox="0 0 1 1" preserveAspectRatio="none">
+                {stamp.paths.map((path, index) => (
+                  <path
+                    key={index}
+                    d={pointsToPath(path)}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    strokeWidth="2"
+                  />
+                ))}
+              </svg>
+            )}
+            {selected && (
+              <button
+                type="button"
+                data-move
+                aria-label="Move signature"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  drag.current = {
+                    kind: "move",
+                    target: "stamp",
+                    id: stamp.id,
+                    ox: event.clientX,
+                    oy: event.clientY,
+                    nx: stamp.nx,
+                    ny: stamp.ny,
+                    dragging: true,
+                  };
+                  onSelectStamp(stamp.id);
+                }}
+                onPointerMove={onDragMove}
+                onPointerUp={onDragUp}
+                className="absolute -top-11 left-1/2 z-30 flex h-11 w-16 -translate-x-1/2 cursor-grab items-center justify-center touch-none active:cursor-grabbing"
+              >
+                <span className="flex items-center justify-center rounded-sm bg-primary px-2 py-1 text-primary-foreground shadow-[var(--shadow-border)]">
+                  <GripHorizontal className="size-4" />
+                </span>
+              </button>
+            )}
+            {selected &&
+              HANDLES.map((handle) => (
+                <button
+                  key={handle.id}
+                  type="button"
+                  data-handle={handle.id}
+                  aria-label={handle.label}
+                  onPointerDown={(event) => onStampHandlePointerDown(event, stamp, handle.id)}
+                  onPointerMove={onDragMove}
+                  onPointerUp={onDragUp}
+                  className={cn(
+                    "absolute z-20 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center touch-none",
+                    handle.className,
+                  )}
+                >
+                  <span className="block size-3 rounded-xs bg-primary shadow-[var(--shadow-border)] ring-2 ring-card" />
+                </button>
+              ))}
+          </div>
+        );
+      })}
 
       {pageBoxes.map((box) => {
         const selected = box.id === selectedId;

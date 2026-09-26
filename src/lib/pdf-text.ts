@@ -35,6 +35,18 @@ export interface Stroke {
   width: number;
 }
 
+export interface SignatureStamp {
+  id: string;
+  page: number;
+  nx: number;
+  ny: number;
+  nw: number;
+  nh: number;
+  kind: "draw" | "type";
+  paths: Array<Array<{ nx: number; ny: number }>>;
+  text: string;
+}
+
 export interface TextLine {
   id: string;
   str: string;
@@ -318,6 +330,75 @@ export async function applyStrokes(bytes: Uint8Array, strokes: Stroke[]): Promis
           borderOpacity: 1,
           borderLineCap: LineCapStyle.Round,
         });
+      }
+      jsPage.cleanup();
+    }
+  } finally {
+    await js.destroy();
+  }
+
+  return pdf.save();
+}
+
+export async function applySignatures(bytes: Uint8Array, stamps: SignatureStamp[]): Promise<Uint8Array> {
+  const pending = stamps.filter((stamp) =>
+    stamp.kind === "type" ? stamp.text.trim().length > 0 : stamp.paths.some((path) => path.length > 0),
+  );
+  if (pending.length === 0) return bytes;
+  const pdfjs = await loadPdfjs();
+  const data = new Uint8Array(bytes.byteLength);
+  data.set(bytes);
+  const js = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
+  const pdf = await PDFDocument.load(bytes);
+  const script = await pdf.embedFont(StandardFonts.TimesRomanItalic);
+
+  try {
+    const byPage = new Map<number, SignatureStamp[]>();
+    for (const stamp of pending) {
+      const list = byPage.get(stamp.page) ?? [];
+      list.push(stamp);
+      byPage.set(stamp.page, list);
+    }
+
+    for (const [pageIndex, pageStamps] of byPage) {
+      const page = pdf.getPages()[pageIndex];
+      const jsPage = await js.getPage(pageIndex + 1);
+      if (!page || !jsPage) continue;
+      const viewport = jsPage.getViewport({ scale: 1 });
+
+      for (const stamp of pageStamps) {
+        const rect = visualToPdf(viewport, stamp);
+        if (stamp.kind === "type") {
+          const text = winAnsi(stamp.text.trim());
+          let size = Math.max(10, rect.height * 0.55);
+          while (size > 8 && script.widthOfTextAtSize(text, size) > rect.width - 4) size -= 0.5;
+          const width = script.widthOfTextAtSize(text, size);
+          page.drawText(text, {
+            x: rect.x + Math.max(0, (rect.width - width) / 2),
+            y: rect.y + Math.max(2, (rect.height - size) * 0.35),
+            size,
+            font: script,
+            color: INK,
+          });
+        } else {
+          const weight = Math.max(1.2, Math.min(4, rect.height * 0.08));
+          for (const path of stamp.paths) {
+            if (path.length === 0) continue;
+            const pts = path.map((point) =>
+              visualPointToPdf(viewport, stamp.nx + point.nx * stamp.nw, stamp.ny + point.ny * stamp.nh),
+            );
+            if (pts.length === 1 && pts[0]) pts.push({ x: pts[0].x + 0.4, y: pts[0].y });
+            const d = pts
+              .map((pt, index) => `${index === 0 ? "M" : "L"} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`)
+              .join(" ");
+            page.drawSvgPath(d, {
+              borderColor: INK,
+              borderWidth: weight,
+              borderOpacity: 1,
+              borderLineCap: LineCapStyle.Round,
+            });
+          }
+        }
       }
       jsPage.cleanup();
     }
