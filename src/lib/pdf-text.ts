@@ -2,6 +2,7 @@ import { PDFDocument, StandardFonts, rgb, BlendMode, LineCapStyle, type PDFFont 
 import { loadPdfjs } from "@/lib/pdf-render";
 
 export type TextFont = "sans" | "serif";
+export type TextFill = "none" | "gray" | "blue" | "yellow";
 
 export interface TextBox {
   id: string;
@@ -15,6 +16,7 @@ export interface TextBox {
   font: TextFont;
   bold: boolean;
   italic: boolean;
+  fill: TextFill;
   replace: boolean;
   sourceId?: string;
 }
@@ -64,6 +66,13 @@ const META = rgb(0.43, 0.4, 0.36);
 const COVER = rgb(0.98, 0.969, 0.941);
 const MARK = rgb(0.91, 0.77, 0.28);
 const SIGN_META = 0.32;
+
+export const TEXT_FILLS: Record<TextFill, { label: string; css: string; pdf: ReturnType<typeof rgb> | null }> = {
+  none: { label: "Transparent", css: "transparent", pdf: null },
+  gray: { label: "Light gray", css: "#e4e0d6", pdf: rgb(0.894, 0.878, 0.839) },
+  blue: { label: "Light blue", css: "#d5e6f2", pdf: rgb(0.835, 0.902, 0.949) },
+  yellow: { label: "Light yellow", css: "#f4ebb2", pdf: rgb(0.957, 0.922, 0.698) },
+};
 
 const WINANSI: Record<string, string> = {
   "\u2018": "'",
@@ -223,14 +232,16 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
         const font = pickFace(faces, box.font, Boolean(box.bold), Boolean(box.italic));
         const size = Math.max(6, Math.min(72, box.size));
         const lines = wrapText(winAnsi(box.text), font, size, width - 2);
-
-        if (box.replace) {
+        const fill = TEXT_FILLS[box.fill ?? "none"]?.pdf ?? null;
+        if (box.replace || fill) {
+          const padX = Math.max(2, size * 0.18);
+          const padY = Math.max(4, size * 0.38);
           page.drawRectangle({
-            x: x - 1,
-            y: y - 1,
-            width: width + 2,
-            height: height + 2,
-            color: COVER,
+            x: x - padX,
+            y: y - padY,
+            width: width + padX * 2,
+            height: height + padY * 2,
+            color: fill ?? COVER,
           });
         }
 

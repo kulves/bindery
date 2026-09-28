@@ -12,6 +12,8 @@ import {
   Trash2,
   Type,
   Undo2,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -29,11 +31,13 @@ import {
   rotatePage,
   safeFilename,
 } from "@/lib/pdf";
-import { applyHighlights, applySignatures, applyStrokes, applyTextBoxes, fetchPublicIp, formatSignTime, type TextBox, type TextFont } from "@/lib/pdf-text";
+import { applyHighlights, applySignatures, applyStrokes, applyTextBoxes, fetchPublicIp, formatSignTime, TEXT_FILLS, type TextBox, type TextFill, type TextFont } from "@/lib/pdf-text";
 import { cn } from "@/lib/utils";
 import { useActiveDoc, useWorkspace } from "@/store/workspace";
 
 const COMING = [{ icon: ImageIcon, label: "Image" }];
+
+const ZOOMS = [0.75, 1, 1.25, 1.5, 2] as const;
 
 const PEN = [
   { id: "fine", label: "Fine", width: 1.8 },
@@ -80,7 +84,9 @@ export function EditorView() {
   const [size, setSize] = useState(14);
   const [bold, setBold] = useState(false);
   const [italic, setItalic] = useState(false);
+  const [fill, setFill] = useState<TextFill>("none");
   const [penWidth, setPenWidth] = useState(3.2);
+  const [zoom, setZoom] = useState(1);
   const [signPaths, setSignPaths] = useState<Array<Array<{ nx: number; ny: number }>>>([]);
   const [signName, setSignName] = useState("");
   const [selectedStampId, setSelectedStampId] = useState<string | null>(null);
@@ -292,6 +298,31 @@ export function EditorView() {
             <Stamp />
             Sign
           </ToolButton>
+          <span className="mx-2 hidden h-8 w-px bg-border sm:block" />
+          <ToolButton
+            label="Zoom out"
+            disabled={zoom <= ZOOMS[0]}
+            onClick={() => setZoom((value) => ZOOMS[Math.max(0, ZOOMS.indexOf(value as (typeof ZOOMS)[number]) - 1)] ?? value)}
+          >
+            <ZoomOut />
+            Out
+          </ToolButton>
+          <span className="min-w-14 px-1 text-center text-sm tabular-nums text-muted-foreground">
+            {Math.round(zoom * 100)}%
+          </span>
+          <ToolButton
+            label="Zoom in"
+            disabled={zoom >= ZOOMS[ZOOMS.length - 1]!}
+            onClick={() =>
+              setZoom((value) => {
+                const index = ZOOMS.indexOf(value as (typeof ZOOMS)[number]);
+                return ZOOMS[Math.min(ZOOMS.length - 1, index + 1)] ?? value;
+              })
+            }
+          >
+            <ZoomIn />
+            In
+          </ToolButton>
           <ToolButton
             label="Rotate 90°"
             onClick={() => void mutate("Rotating…", (bytes) => rotatePage(bytes, page))}
@@ -446,7 +477,7 @@ export function EditorView() {
         {textMode && (
           <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
             <p className="text-sm text-muted-foreground sm:flex-1">
-              Click a line to rewrite it, or click empty space to add a box. Drag the grip to move, a corner to resize.
+              Click a line to rewrite it — Bindery covers the original. Empty space adds a new box. Drag the grip to move, a corner to resize.
             </p>
             <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               Size
@@ -522,6 +553,38 @@ export function EditorView() {
                 <Italic className="size-4" />
               </button>
             </div>
+            <div className="flex items-center gap-1 rounded-full bg-card p-1">
+              {(Object.keys(TEXT_FILLS) as TextFill[]).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  aria-label={TEXT_FILLS[item].label}
+                  aria-pressed={(selected?.fill ?? fill) === item}
+                  title={TEXT_FILLS[item].label}
+                  onClick={() => {
+                    setFill(item);
+                    if (selected) patchTextBox(doc.id, selected.id, { fill: item });
+                  }}
+                  className={cn(
+                    "flex size-11 items-center justify-center rounded-full",
+                    (selected?.fill ?? fill) === item ? "ring-2 ring-foreground" : "hover:bg-muted",
+                  )}
+                >
+                  <span
+                    className="block size-6 rounded-xs ring-1 ring-border"
+                    style={{
+                      backgroundColor: item === "none" ? "transparent" : TEXT_FILLS[item].css,
+                      backgroundImage:
+                        item === "none"
+                          ? "linear-gradient(45deg, #d9d1c3 25%, transparent 25%, transparent 75%, #d9d1c3 75%), linear-gradient(45deg, #d9d1c3 25%, #faf7f0 25%, #faf7f0 75%, #d9d1c3 75%)"
+                          : undefined,
+                      backgroundSize: item === "none" ? "8px 8px" : undefined,
+                      backgroundPosition: item === "none" ? "0 0, 4px 4px" : undefined,
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
             {selected && (
               <Button
                 variant="ghost"
@@ -592,7 +655,7 @@ export function EditorView() {
           ))}
         </ol>
 
-        <figure className="flex min-h-[50vh] items-center justify-center rounded-xl bg-desk p-4 shadow-[var(--shadow-border)] sm:p-8">
+        <figure className="flex min-h-[50vh] max-h-[78vh] items-start justify-center overflow-auto rounded-xl bg-desk p-4 shadow-[var(--shadow-border)] sm:p-8">
           <PageStage
             bytes={doc.bytes}
             page={page}
@@ -609,7 +672,9 @@ export function EditorView() {
             size={size}
             bold={bold}
             italic={italic}
+            fill={fill}
             penWidth={penWidth}
+            zoom={zoom}
             signature={signature}
             onSelect={setSelectedId}
             onAdd={onAddBox}

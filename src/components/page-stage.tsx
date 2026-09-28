@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { GripHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { extractPageLines, signMetaLines, type HighlightMark, type SignatureStamp, type Stroke, type TextBox, type TextFont, type TextLine } from "@/lib/pdf-text";
+import { extractPageLines, signMetaLines, TEXT_FILLS, type HighlightMark, type SignatureStamp, type Stroke, type TextBox, type TextFill, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
 
 interface PageStageProps {
@@ -23,7 +23,9 @@ interface PageStageProps {
   size: number;
   bold: boolean;
   italic: boolean;
+  fill: TextFill;
   penWidth: number;
+  zoom: number;
   signature: { kind: "draw" | "type"; paths: Array<Array<{ nx: number; ny: number }>>; text: string; ip: string } | null;
   onSelect: (id: string | null) => void;
   onAdd: (box: TextBox) => void;
@@ -90,7 +92,9 @@ export function PageStage({
   size,
   bold,
   italic,
+  fill,
   penWidth,
+  zoom,
   signature,
   onSelect,
   onAdd,
@@ -184,6 +188,7 @@ export function PageStage({
       font,
       bold,
       italic,
+      fill,
       replace: false,
     };
     onAdd(box);
@@ -216,18 +221,23 @@ export function PageStage({
       onSelect(existing.id);
       return;
     }
+    const ny = Math.max(0, line.ny - line.nh * 0.2);
+    const nh = Math.min(1 - ny, Math.max(line.nh * 1.55, MIN_H));
+    const nx = Math.max(0, line.nx - 0.006);
+    const nw = Math.min(1 - nx, Math.max(line.nw + 0.016, MIN_W));
     const box: TextBox = {
       id: crypto.randomUUID(),
       page,
-      nx: line.nx,
-      ny: line.ny,
-      nw: Math.max(line.nw, MIN_W),
-      nh: Math.max(line.nh, MIN_H),
+      nx,
+      ny,
+      nw,
+      nh,
       text: line.str,
       size: Math.round(line.size) || size,
       font: "serif",
       bold: false,
       italic: false,
+      fill,
       replace: true,
       sourceId: line.id,
     };
@@ -468,7 +478,7 @@ export function PageStage({
       onPointerMove={onStagePointerMove}
       onPointerUp={onStagePointerUp}
       className={cn(
-        "relative mx-auto max-h-[70vh] w-max max-w-full rounded-md bg-card shadow-[var(--shadow-page)]",
+        "relative mx-auto w-max rounded-md bg-card shadow-[var(--shadow-page)]",
         highlightMode || signMode || drawMode
           ? "cursor-crosshair"
           : textMode
@@ -481,10 +491,17 @@ export function PageStage({
           src={preview}
           alt=""
           draggable={false}
-          className="pointer-events-none block max-h-[70vh] w-auto max-w-full overflow-hidden rounded-md"
+          className="pointer-events-none block w-auto overflow-hidden rounded-md"
+          style={{
+            height: `${70 * zoom}vh`,
+            maxWidth: zoom <= 1 ? "100%" : "none",
+          }}
         />
       ) : (
-        <div className="page-skeleton aspect-[8.5/11] h-[70vh] max-h-[70vh] w-auto rounded-md" />
+        <div
+          className="page-skeleton aspect-[8.5/11] w-auto rounded-md"
+          style={{ height: `${70 * zoom}vh` }}
+        />
       )}
 
       {pageMarks.map((mark) => {
@@ -735,13 +752,18 @@ export function PageStage({
                 }
               }}
               className={cn(
-                "size-full resize-none bg-card/80 px-1 py-0.5 leading-tight text-foreground outline-none placeholder:text-muted-foreground",
+                "size-full resize-none px-1 py-0.5 leading-tight text-foreground outline-none placeholder:text-muted-foreground",
                 box.font === "serif" ? "font-display" : "font-sans",
                 box.bold && "font-bold",
                 box.italic && "italic",
                 box.size >= 28 ? "text-3xl" : box.size >= 20 ? "text-xl" : box.size >= 14 ? "text-base" : "text-sm",
                 !selected && "pointer-events-none",
               )}
+              style={{
+                backgroundColor: box.replace && (box.fill ?? "none") === "none"
+                  ? "#faf7f0"
+                  : TEXT_FILLS[box.fill ?? "none"].css,
+              }}
             />
             {selected && (
               <button
