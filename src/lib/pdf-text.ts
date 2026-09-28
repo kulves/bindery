@@ -45,6 +45,8 @@ export interface SignatureStamp {
   kind: "draw" | "type";
   paths: Array<Array<{ nx: number; ny: number }>>;
   text: string;
+  signedAt: string;
+  ip: string;
 }
 
 export interface TextLine {
@@ -58,8 +60,10 @@ export interface TextLine {
 }
 
 const INK = rgb(0.11, 0.1, 0.09);
+const META = rgb(0.43, 0.4, 0.36);
 const COVER = rgb(0.98, 0.969, 0.941);
 const MARK = rgb(0.91, 0.77, 0.28);
+const SIGN_META = 0.32;
 
 const WINANSI: Record<string, string> = {
   "\u2018": "'",
@@ -351,6 +355,7 @@ export async function applySignatures(bytes: Uint8Array, stamps: SignatureStamp[
   const js = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
   const pdf = await PDFDocument.load(bytes);
   const script = await pdf.embedFont(StandardFonts.TimesRomanItalic);
+  const label = await pdf.embedFont(StandardFonts.Helvetica);
 
   try {
     const byPage = new Map<number, SignatureStamp[]>();
@@ -368,24 +373,27 @@ export async function applySignatures(bytes: Uint8Array, stamps: SignatureStamp[
 
       for (const stamp of pageStamps) {
         const rect = visualToPdf(viewport, stamp);
+        const band = rect.height * SIGN_META;
+        const inkH = Math.max(8, rect.height - band);
         if (stamp.kind === "type") {
           const text = winAnsi(stamp.text.trim());
-          let size = Math.max(10, rect.height * 0.55);
+          let size = Math.max(10, inkH * 0.55);
           while (size > 8 && script.widthOfTextAtSize(text, size) > rect.width - 4) size -= 0.5;
           const width = script.widthOfTextAtSize(text, size);
           page.drawText(text, {
             x: rect.x + Math.max(0, (rect.width - width) / 2),
-            y: rect.y + Math.max(2, (rect.height - size) * 0.35),
+            y: rect.y + band + Math.max(2, (inkH - size) * 0.35),
             size,
             font: script,
             color: INK,
           });
         } else {
-          const weight = Math.max(1.2, Math.min(4, rect.height * 0.08));
+          const weight = Math.max(1.2, Math.min(4, inkH * 0.08));
+          const scale = 1 - SIGN_META;
           for (const path of stamp.paths) {
             if (path.length === 0) continue;
             const pts = path.map((point) =>
-              visualPointToPdf(viewport, stamp.nx + point.nx * stamp.nw, stamp.ny + point.ny * stamp.nh),
+              visualPointToPdf(viewport, stamp.nx + point.nx * stamp.nw, stamp.ny + point.ny * stamp.nh * scale),
             );
             if (pts.length === 1 && pts[0]) pts.push({ x: pts[0].x + 0.4, y: pts[0].y });
             const d = pts
@@ -399,6 +407,17 @@ export async function applySignatures(bytes: Uint8Array, stamps: SignatureStamp[
             });
           }
         }
+        const metaSize = Math.max(6, Math.min(8, rect.width * 0.04));
+        const lines = signMetaLines(stamp);
+        lines.forEach((line, index) => {
+          page.drawText(winAnsi(line), {
+            x: rect.x + 2,
+            y: rect.y + 3 + (lines.length - 1 - index) * (metaSize + 1.5),
+            size: metaSize,
+            font: label,
+            color: META,
+          });
+        });
       }
       jsPage.cleanup();
     }
@@ -509,4 +528,38 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): 
 
 function clamp01(n: number) {
   return Math.min(1, Math.max(0, n));
+}
+
+export function formatSignTime(iso = new Date().toISOString()) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+}
+
+export function signMetaLines(stamp: Pick<SignatureStamp, "signedAt" | "ip">) {
+  const when = formatSignTime(stamp.signedAt);
+  const ip = stamp.ip?.trim() ? `IP ${stamp.ip.trim()}` : "IP unavailable";
+  return when ? [when, ip] : [ip];
+}
+
+export async function fetchPublicIp(): Promise<string> {
+  const control = new AbortController();
+  const timer = setTimeout(() => control.abort(), 4000);
+  try {
+    const res = await fetch("https://api.ipify.org?format=json", { signal: control.signal });
+    if (!res.ok) return "";
+    const data = (await res.json()) as { ip?: unknown };
+    return typeof data.ip === "string" ? data.ip : "";
+  } catch {
+    return "";
+  } finally {
+    clearTimeout(timer);
+  }
 }

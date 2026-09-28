@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { GripHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { extractPageLines, type HighlightMark, type SignatureStamp, type Stroke, type TextBox, type TextFont, type TextLine } from "@/lib/pdf-text";
+import { extractPageLines, signMetaLines, type HighlightMark, type SignatureStamp, type Stroke, type TextBox, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
 
 interface PageStageProps {
@@ -24,7 +24,7 @@ interface PageStageProps {
   bold: boolean;
   italic: boolean;
   penWidth: number;
-  signature: { kind: "draw" | "type"; paths: Array<Array<{ nx: number; ny: number }>>; text: string } | null;
+  signature: { kind: "draw" | "type"; paths: Array<Array<{ nx: number; ny: number }>>; text: string; ip: string } | null;
   onSelect: (id: string | null) => void;
   onAdd: (box: TextBox) => void;
   onPatch: (id: string, patch: Partial<TextBox>) => void;
@@ -191,8 +191,8 @@ export function PageStage({
 
   function placeStamp(point: { nx: number; ny: number }) {
     if (!signature) return;
-    const nw = 0.34;
-    const nh = 0.1;
+    const nw = 0.36;
+    const nh = 0.14;
     onAddStamp({
       id: crypto.randomUUID(),
       page,
@@ -203,6 +203,8 @@ export function PageStage({
       kind: signature.kind,
       paths: signature.paths,
       text: signature.text,
+      signedAt: new Date().toISOString(),
+      ip: signature.ip,
     });
   }
 
@@ -607,26 +609,37 @@ export function PageStage({
               height: `${stamp.nh * 100}%`,
             }}
           >
-            {stamp.kind === "type" ? (
-              <p className="flex size-full items-center justify-center px-2 font-display text-lg italic leading-none">
-                {stamp.text}
-              </p>
-            ) : (
-              <svg className="size-full text-foreground" viewBox="0 0 1 1" preserveAspectRatio="none">
-                {stamp.paths.map((path, index) => (
-                  <path
-                    key={index}
-                    d={pointsToPath(path)}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    vectorEffect="non-scaling-stroke"
-                    strokeWidth="2"
-                  />
+            <div className="flex size-full flex-col">
+              <div className="min-h-0 flex-1">
+                {stamp.kind === "type" ? (
+                  <p className="flex size-full items-center justify-center px-2 font-display text-lg italic leading-none">
+                    {stamp.text}
+                  </p>
+                ) : (
+                  <svg className="size-full text-foreground" viewBox="0 0 1 1" preserveAspectRatio="none">
+                    {stamp.paths.map((path, index) => (
+                      <path
+                        key={index}
+                        d={pointsToPath(path)}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        vectorEffect="non-scaling-stroke"
+                        strokeWidth="2"
+                      />
+                    ))}
+                  </svg>
+                )}
+              </div>
+              <div className="px-1 pb-0.5">
+                {signMetaLines(stamp).map((line) => (
+                  <p key={line} className="truncate text-xs leading-tight text-muted-foreground">
+                    {line}
+                  </p>
                 ))}
-              </svg>
-            )}
+              </div>
+            </div>
             {selected && (
               <button
                 type="button"

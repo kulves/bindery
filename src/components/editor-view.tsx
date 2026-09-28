@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import {
   Bold,
   ChevronDown,
@@ -29,7 +29,7 @@ import {
   rotatePage,
   safeFilename,
 } from "@/lib/pdf";
-import { applyHighlights, applySignatures, applyStrokes, applyTextBoxes, type TextBox, type TextFont } from "@/lib/pdf-text";
+import { applyHighlights, applySignatures, applyStrokes, applyTextBoxes, fetchPublicIp, formatSignTime, type TextBox, type TextFont } from "@/lib/pdf-text";
 import { cn } from "@/lib/utils";
 import { useActiveDoc, useWorkspace } from "@/store/workspace";
 
@@ -84,6 +84,22 @@ export function EditorView() {
   const [signPaths, setSignPaths] = useState<Array<Array<{ nx: number; ny: number }>>>([]);
   const [signName, setSignName] = useState("");
   const [selectedStampId, setSelectedStampId] = useState<string | null>(null);
+  const [signerIp, setSignerIp] = useState("");
+  const [ipStatus, setIpStatus] = useState<"idle" | "loading" | "ready" | "missing">("idle");
+
+  useEffect(() => {
+    if (!signMode) return;
+    let alive = true;
+    setIpStatus("loading");
+    void fetchPublicIp().then((ip) => {
+      if (!alive) return;
+      setSignerIp(ip);
+      setIpStatus(ip ? "ready" : "missing");
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signMode]);
 
   if (docs.length === 0) {
     return (
@@ -112,9 +128,9 @@ export function EditorView() {
   const selectedMark = marks.find((mark) => mark.id === selectedMarkId) ?? null;
   const selectedStamp = signs.find((stamp) => stamp.id === selectedStampId) ?? null;
   const signature = signName.trim()
-    ? { kind: "type" as const, paths: [] as Array<Array<{ nx: number; ny: number }>>, text: signName.trim() }
+    ? { kind: "type" as const, paths: [] as Array<Array<{ nx: number; ny: number }>>, text: signName.trim(), ip: signerIp }
     : signPaths.length > 0
-      ? { kind: "draw" as const, paths: signPaths, text: "" }
+      ? { kind: "draw" as const, paths: signPaths, text: "", ip: signerIp }
       : null;
 
   async function bake(bytes: Uint8Array) {
@@ -377,8 +393,16 @@ export function EditorView() {
           <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3">
             <p className="text-sm text-muted-foreground">
               {signature
-                ? "Click the page to stamp your signature. Drag the grip to move it."
+                ? "Click the page to stamp your signature, date, time, and IP. Drag the grip to move it."
                 : "Draw your name in the pad, or type it, then click the page."}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {formatSignTime()}
+              {ipStatus === "loading"
+                ? " · looking up IP…"
+                : signerIp
+                  ? ` · IP ${signerIp}`
+                  : " · IP unavailable"}
             </p>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
               <SignPad paths={signPaths} onChange={setSignPaths} />
