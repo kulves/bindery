@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { GripHorizontal } from "lucide-react";
+import { Check, GripHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { extractPageLines, signMetaLines, TEXT_FILLS, type HighlightMark, type SignatureStamp, type Stroke, type TextBox, type TextFill, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
@@ -336,7 +336,7 @@ export function PageStage({
 
   function onBoxPointerDown(event: ReactPointerEvent<HTMLDivElement>, box: TextBox) {
     if (!textMode) return;
-    if ((event.target as HTMLElement).closest("[data-handle],[data-move]")) return;
+    if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
     if ((event.target as HTMLElement).tagName === "TEXTAREA") return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -386,7 +386,7 @@ export function PageStage({
 
   function onStampPointerDown(event: ReactPointerEvent<HTMLDivElement>, stamp: SignatureStamp) {
     if (!signMode) return;
-    if ((event.target as HTMLElement).closest("[data-handle],[data-move]")) return;
+    if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -760,26 +760,50 @@ export function PageStage({
                 !selected && "pointer-events-none",
               )}
               style={{
-                backgroundColor: box.replace && (box.fill ?? "none") === "none"
-                  ? "#faf7f0"
-                  : TEXT_FILLS[box.fill ?? "none"].css,
+                backgroundColor: TEXT_FILLS[box.fill ?? "none"].css,
               }}
             />
             {selected && (
-              <button
-                type="button"
-                data-move
-                aria-label="Move text box"
-                title="Drag to move"
-                onPointerDown={(event) => onMovePointerDown(event, box)}
-                onPointerMove={onDragMove}
-                onPointerUp={onDragUp}
-                className="absolute -top-11 left-1/2 z-30 flex h-11 w-16 -translate-x-1/2 cursor-grab items-center justify-center touch-none active:cursor-grabbing"
-              >
-                <span className="flex items-center justify-center rounded-sm bg-primary px-2 py-1 text-primary-foreground shadow-[var(--shadow-border)]">
+              <div className="absolute -top-12 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1">
+                <button
+                  type="button"
+                  data-box-action
+                  aria-label="Delete text box"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRemove(box.id);
+                  }}
+                  className="inline-flex size-11 items-center justify-center rounded-sm bg-destructive text-destructive-foreground shadow-[var(--shadow-border)]"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  data-move
+                  aria-label="Move text box"
+                  title="Drag to move"
+                  onPointerDown={(event) => onMovePointerDown(event, box)}
+                  onPointerMove={onDragMove}
+                  onPointerUp={onDragUp}
+                  className="inline-flex size-11 cursor-grab items-center justify-center rounded-sm bg-primary text-primary-foreground shadow-[var(--shadow-border)] touch-none active:cursor-grabbing"
+                >
                   <GripHorizontal className="size-4" />
-                </span>
-              </button>
+                </button>
+                <button
+                  type="button"
+                  data-box-action
+                  aria-label="Done editing"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect(null);
+                  }}
+                  className="inline-flex size-11 items-center justify-center rounded-sm bg-ok text-ok-foreground shadow-[var(--shadow-border)]"
+                >
+                  <Check className="size-4" />
+                </button>
+              </div>
             )}
             {selected &&
               HANDLES.map((handle) => (

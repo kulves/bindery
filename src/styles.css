@@ -24,6 +24,8 @@
   --color-desk: #ece6da;
   --color-ink-soft: #2c2925;
   --color-mark: #e8c547;
+  --color-ok: #2d6a4f;
+  --color-ok-foreground: #f6f3ec;
 
   --font-sans: "IBM Plex Sans", "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Newsreader", "Iowan Old Style", Palatino, Georgia, serif;
