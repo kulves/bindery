@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { PdfDoc, SplitMode, ToolId } from "@/lib/pdf";
-import type { HighlightMark, SignatureStamp, Stroke, TextBox } from "@/lib/pdf-text";
+import type { HighlightMark, PagePicture, SignatureStamp, Stroke, TextBox } from "@/lib/pdf-text";
 
 interface WorkspaceState {
   tool: ToolId;
@@ -11,6 +11,7 @@ interface WorkspaceState {
   highlights: Record<string, HighlightMark[]>;
   strokes: Record<string, Stroke[]>;
   stamps: Record<string, SignatureStamp[]>;
+  pictures: Record<string, PagePicture[]>;
   splitMode: SplitMode;
   rangeText: string;
   everyN: number;
@@ -44,6 +45,10 @@ interface WorkspaceState {
   patchStamp: (docId: string, id: string, patch: Partial<SignatureStamp>) => void;
   removeStamp: (docId: string, id: string) => void;
   clearStamps: (docId: string) => void;
+  addPicture: (docId: string, picture: PagePicture) => void;
+  patchPicture: (docId: string, id: string, patch: Partial<PagePicture>) => void;
+  removePicture: (docId: string, id: string) => void;
+  clearPictures: (docId: string) => void;
   setSplitMode: (mode: SplitMode) => void;
   setRangeText: (value: string) => void;
   setEveryN: (n: number) => void;
@@ -61,6 +66,7 @@ const INITIAL = {
   highlights: {} as Record<string, HighlightMark[]>,
   strokes: {} as Record<string, Stroke[]>,
   stamps: {} as Record<string, SignatureStamp[]>,
+  pictures: {} as Record<string, PagePicture[]>,
   splitMode: "extract" as SplitMode,
   rangeText: "1-3, 4-6",
   everyN: 2,
@@ -80,12 +86,14 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       const highlights = { ...state.highlights };
       const strokes = { ...state.strokes };
       const stamps = { ...state.stamps };
+      const pictures = { ...state.pictures };
       for (const doc of incoming) {
         if (!selected[doc.id]) selected[doc.id] = [];
         if (!textBoxes[doc.id]) textBoxes[doc.id] = [];
         if (!highlights[doc.id]) highlights[doc.id] = [];
         if (!strokes[doc.id]) strokes[doc.id] = [];
         if (!stamps[doc.id]) stamps[doc.id] = [];
+        if (!pictures[doc.id]) pictures[doc.id] = [];
       }
       return {
         docs,
@@ -94,6 +102,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
         highlights,
         strokes,
         stamps,
+        pictures,
         activeId: state.activeId ?? incoming[0]?.id ?? null,
       };
     }),
@@ -105,11 +114,13 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       const highlights = { ...state.highlights };
       const strokes = { ...state.strokes };
       const stamps = { ...state.stamps };
+      const pictures = { ...state.pictures };
       delete selected[id];
       delete textBoxes[id];
       delete highlights[id];
       delete strokes[id];
       delete stamps[id];
+      delete pictures[id];
       return {
         docs,
         selected,
@@ -117,6 +128,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
         highlights,
         strokes,
         stamps,
+        pictures,
         activeId: state.activeId === id ? (docs[0]?.id ?? null) : state.activeId,
       };
     }),
@@ -270,6 +282,28 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   clearStamps: (docId) =>
     set((state) => ({
       stamps: { ...state.stamps, [docId]: [] },
+    })),
+  addPicture: (docId, picture) =>
+    set((state) => ({
+      pictures: { ...state.pictures, [docId]: [...(state.pictures[docId] ?? []), picture] },
+    })),
+  patchPicture: (docId, id, patch) =>
+    set((state) => ({
+      pictures: {
+        ...state.pictures,
+        [docId]: (state.pictures[docId] ?? []).map((picture) => (picture.id === id ? { ...picture, ...patch } : picture)),
+      },
+    })),
+  removePicture: (docId, id) =>
+    set((state) => ({
+      pictures: {
+        ...state.pictures,
+        [docId]: (state.pictures[docId] ?? []).filter((picture) => picture.id !== id),
+      },
+    })),
+  clearPictures: (docId) =>
+    set((state) => ({
+      pictures: { ...state.pictures, [docId]: [] },
     })),
   setSplitMode: (splitMode) => set({ splitMode }),
   setRangeText: (rangeText) => set({ rangeText }),

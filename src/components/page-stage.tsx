@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Check, GripHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { extractPageLines, signMetaLines, TEXT_FILLS, type HighlightMark, type SignatureStamp, type Stroke, type TextBox, type TextFill, type TextFont, type TextLine } from "@/lib/pdf-text";
+import { extractPageLines, signMetaLines, TEXT_FILLS, type HighlightMark, type PagePicture, type SignatureStamp, type Stroke, type TextBox, type TextFill, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
 
 interface PageStageProps {
@@ -12,13 +12,16 @@ interface PageStageProps {
   highlightMode: boolean;
   drawMode: boolean;
   signMode: boolean;
+  imageMode: boolean;
   boxes: TextBox[];
   marks: HighlightMark[];
   strokes: Stroke[];
   stamps: SignatureStamp[];
+  pictures: PagePicture[];
   selectedId: string | null;
   selectedMarkId: string | null;
   selectedStampId: string | null;
+  selectedPictureId: string | null;
   font: TextFont;
   size: number;
   bold: boolean;
@@ -27,6 +30,7 @@ interface PageStageProps {
   penWidth: number;
   zoom: number;
   signature: { kind: "draw" | "type"; paths: Array<Array<{ nx: number; ny: number }>>; text: string; ip: string } | null;
+  picture: { mime: PagePicture["mime"]; dataUrl: string; aspect: number } | null;
   onSelect: (id: string | null) => void;
   onAdd: (box: TextBox) => void;
   onPatch: (id: string, patch: Partial<TextBox>) => void;
@@ -40,15 +44,19 @@ interface PageStageProps {
   onAddStamp: (stamp: SignatureStamp) => void;
   onPatchStamp: (id: string, patch: Partial<SignatureStamp>) => void;
   onRemoveStamp: (id: string) => void;
+  onSelectPicture: (id: string | null) => void;
+  onAddPicture: (picture: PagePicture) => void;
+  onPatchPicture: (id: string, patch: Partial<PagePicture>) => void;
+  onRemovePicture: (id: string) => void;
 }
 
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 type Drag =
-  | { kind: "move"; target: "box" | "stamp"; id: string; ox: number; oy: number; nx: number; ny: number; dragging: boolean }
+  | { kind: "move"; target: "box" | "stamp" | "picture"; id: string; ox: number; oy: number; nx: number; ny: number; dragging: boolean }
   | {
       kind: "resize";
-      target: "box" | "stamp";
+      target: "box" | "stamp" | "picture";
       id: string;
       handle: Handle;
       ox: number;
@@ -81,13 +89,16 @@ export function PageStage({
   highlightMode,
   drawMode,
   signMode,
+  imageMode,
   boxes,
   marks,
   strokes,
   stamps,
+  pictures,
   selectedId,
   selectedMarkId,
   selectedStampId,
+  selectedPictureId,
   font,
   size,
   bold,
@@ -96,6 +107,7 @@ export function PageStage({
   penWidth,
   zoom,
   signature,
+  picture,
   onSelect,
   onAdd,
   onPatch,
@@ -109,6 +121,10 @@ export function PageStage({
   onAddStamp,
   onPatchStamp,
   onRemoveStamp,
+  onSelectPicture,
+  onAddPicture,
+  onPatchPicture,
+  onRemovePicture,
 }: PageStageProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState(fallback ?? "");
@@ -152,6 +168,7 @@ export function PageStage({
   const pageMarks = marks.filter((mark) => mark.page === page);
   const pageStrokes = strokes.filter((stroke) => stroke.page === page);
   const pageStamps = stamps.filter((stamp) => stamp.page === page);
+  const pagePictures = pictures.filter((item) => item.page === page);
   const covered = new Set(
     pageBoxes.map((box) => box.sourceId).filter((id): id is string => Boolean(id)),
   );
@@ -171,6 +188,10 @@ export function PageStage({
     if (!point) return;
     if (signMode) {
       placeStamp(point);
+      return;
+    }
+    if (imageMode) {
+      placePicture(point);
       return;
     }
     if (!textMode) return;
@@ -210,6 +231,22 @@ export function PageStage({
       text: signature.text,
       signedAt: new Date().toISOString(),
       ip: signature.ip,
+    });
+  }
+
+  function placePicture(point: { nx: number; ny: number }) {
+    if (!picture) return;
+    const nw = 0.36;
+    const nh = Math.min(0.42, nw / Math.max(0.35, picture.aspect));
+    onAddPicture({
+      id: crypto.randomUUID(),
+      page,
+      nx: Math.min(point.nx, 1 - nw),
+      ny: Math.min(point.ny, 1 - nh),
+      nw,
+      nh,
+      mime: picture.mime,
+      dataUrl: picture.dataUrl,
     });
   }
 
@@ -426,6 +463,48 @@ export function PageStage({
     onSelectStamp(stamp.id);
   }
 
+  function onPicturePointerDown(event: ReactPointerEvent<HTMLDivElement>, item: PagePicture) {
+    if (!imageMode) return;
+    if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = {
+      kind: "move",
+      target: "picture",
+      id: item.id,
+      ox: event.clientX,
+      oy: event.clientY,
+      nx: item.nx,
+      ny: item.ny,
+      dragging: false,
+    };
+    onSelectPicture(item.id);
+  }
+
+  function onPictureHandlePointerDown(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    item: PagePicture,
+    handle: Handle,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = {
+      kind: "resize",
+      target: "picture",
+      id: item.id,
+      handle,
+      ox: event.clientX,
+      oy: event.clientY,
+      nx: item.nx,
+      ny: item.ny,
+      nw: item.nw,
+      nh: item.nh,
+    };
+    onSelectPicture(item.id);
+  }
+
   function onDragMove(event: ReactPointerEvent) {
     const active = drag.current;
     const rect = stageRef.current?.getBoundingClientRect();
@@ -445,6 +524,18 @@ export function PageStage({
         });
         return;
       }
+      if (active.target === "picture") {
+        const item = pagePictures.find((pic) => pic.id === active.id);
+        if (!item) return;
+        const pixels = Math.hypot(event.clientX - active.ox, event.clientY - active.oy);
+        if (!active.dragging && pixels < 6) return;
+        active.dragging = true;
+        onPatchPicture(active.id, {
+          nx: clamp(active.nx + dx, 0, 1 - item.nw),
+          ny: clamp(active.ny + dy, 0, 1 - item.nh),
+        });
+        return;
+      }
       const box = pageBoxes.find((item) => item.id === active.id);
       if (!box) return;
       const pixels = Math.hypot(event.clientX - active.ox, event.clientY - active.oy);
@@ -459,6 +550,10 @@ export function PageStage({
     const next = resizeBox(active, dx, dy);
     if (active.target === "stamp") {
       onPatchStamp(active.id, { nx: next.nx, ny: next.ny, nw: next.nw, nh: next.nh });
+      return;
+    }
+    if (active.target === "picture") {
+      onPatchPicture(active.id, { nx: next.nx, ny: next.ny, nw: next.nw, nh: next.nh });
       return;
     }
     onPatch(active.id, { nx: next.nx, ny: next.ny, nw: next.nw, nh: next.nh });
@@ -479,7 +574,7 @@ export function PageStage({
       onPointerUp={onStagePointerUp}
       className={cn(
         "relative mx-auto w-max rounded-md bg-card shadow-[var(--shadow-page)]",
-        highlightMode || signMode || drawMode
+        highlightMode || signMode || drawMode || imageMode
           ? "cursor-crosshair"
           : textMode
             ? "cursor-text"
@@ -605,6 +700,105 @@ export function PageStage({
           />
         )}
       </svg>
+
+      {pagePictures.map((item) => {
+        const selected = item.id === selectedPictureId;
+        return (
+          <div
+            key={item.id}
+            onPointerDown={(event) => onPicturePointerDown(event, item)}
+            onPointerMove={onDragMove}
+            onPointerUp={onDragUp}
+            onClick={(event) => event.stopPropagation()}
+            className={cn(
+              "absolute overflow-hidden bg-card",
+              selected ? "z-10 ring-2 ring-foreground" : "ring-1 ring-accent/40",
+            )}
+            style={{
+              left: `${item.nx * 100}%`,
+              top: `${item.ny * 100}%`,
+              width: `${item.nw * 100}%`,
+              height: `${item.nh * 100}%`,
+            }}
+          >
+            <img src={item.dataUrl} alt="" draggable={false} className="pointer-events-none size-full object-fill" />
+            {selected && (
+              <div className="absolute -top-12 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1">
+                <button
+                  type="button"
+                  data-box-action
+                  aria-label="Delete image"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRemovePicture(item.id);
+                  }}
+                  className="inline-flex size-11 items-center justify-center rounded-sm bg-destructive text-destructive-foreground shadow-[var(--shadow-border)]"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  data-move
+                  aria-label="Move image"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    drag.current = {
+                      kind: "move",
+                      target: "picture",
+                      id: item.id,
+                      ox: event.clientX,
+                      oy: event.clientY,
+                      nx: item.nx,
+                      ny: item.ny,
+                      dragging: true,
+                    };
+                    onSelectPicture(item.id);
+                  }}
+                  onPointerMove={onDragMove}
+                  onPointerUp={onDragUp}
+                  className="inline-flex size-11 cursor-grab items-center justify-center rounded-sm bg-primary text-primary-foreground shadow-[var(--shadow-border)] touch-none active:cursor-grabbing"
+                >
+                  <GripHorizontal className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  data-box-action
+                  aria-label="Done placing image"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectPicture(null);
+                  }}
+                  className="inline-flex size-11 items-center justify-center rounded-sm bg-ok text-ok-foreground shadow-[var(--shadow-border)]"
+                >
+                  <Check className="size-4" />
+                </button>
+              </div>
+            )}
+            {selected &&
+              HANDLES.map((handle) => (
+                <button
+                  key={handle.id}
+                  type="button"
+                  data-handle={handle.id}
+                  aria-label={handle.label}
+                  onPointerDown={(event) => onPictureHandlePointerDown(event, item, handle.id)}
+                  onPointerMove={onDragMove}
+                  onPointerUp={onDragUp}
+                  className={cn(
+                    "absolute z-20 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center touch-none",
+                    handle.className,
+                  )}
+                >
+                  <span className="block size-3 rounded-xs bg-primary shadow-[var(--shadow-border)] ring-2 ring-card" />
+                </button>
+              ))}
+          </div>
+        );
+      })}
 
       {pageStamps.map((stamp) => {
         const selected = stamp.id === selectedStampId;

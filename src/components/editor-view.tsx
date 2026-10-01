@@ -16,10 +16,8 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropZone } from "@/components/drop-zone";
 import { PageStage } from "@/components/page-stage";
 import { addSample, rehydrate } from "@/lib/add-pdfs";
@@ -31,11 +29,9 @@ import {
   rotatePage,
   safeFilename,
 } from "@/lib/pdf";
-import { applyHighlights, applySignatures, applyStrokes, applyTextBoxes, fetchPublicIp, formatSignTime, TEXT_FILLS, type TextBox, type TextFill, type TextFont } from "@/lib/pdf-text";
+import { applyHighlights, applyPictures, applySignatures, applyStrokes, applyTextBoxes, fetchPublicIp, formatSignTime, readPageImage, TEXT_FILLS, type TextBox, type TextFill, type TextFont } from "@/lib/pdf-text";
 import { cn } from "@/lib/utils";
 import { useActiveDoc, useWorkspace } from "@/store/workspace";
-
-const COMING = [{ icon: ImageIcon, label: "Image" }];
 
 const ZOOMS = [0.75, 1, 1.25, 1.5, 2] as const;
 
@@ -54,6 +50,7 @@ export function EditorView() {
   const highlights = useWorkspace((s) => s.highlights);
   const strokes = useWorkspace((s) => s.strokes);
   const stamps = useWorkspace((s) => s.stamps);
+  const pictures = useWorkspace((s) => s.pictures);
   const setActive = useWorkspace((s) => s.setActive);
   const setOutputName = useWorkspace((s) => s.setOutputName);
   const setBusy = useWorkspace((s) => s.setBusy);
@@ -73,11 +70,16 @@ export function EditorView() {
   const patchStamp = useWorkspace((s) => s.patchStamp);
   const removeStamp = useWorkspace((s) => s.removeStamp);
   const clearStamps = useWorkspace((s) => s.clearStamps);
+  const addPicture = useWorkspace((s) => s.addPicture);
+  const patchPicture = useWorkspace((s) => s.patchPicture);
+  const removePicture = useWorkspace((s) => s.removePicture);
+  const clearPictures = useWorkspace((s) => s.clearPictures);
   const [focus, setFocus] = useState(0);
   const [textMode, setTextMode] = useState(false);
   const [highlightMode, setHighlightMode] = useState(false);
   const [drawMode, setDrawMode] = useState(false);
   const [signMode, setSignMode] = useState(false);
+  const [imageMode, setImageMode] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null);
   const [font, setFont] = useState<TextFont>("sans");
@@ -90,6 +92,13 @@ export function EditorView() {
   const [signPaths, setSignPaths] = useState<Array<Array<{ nx: number; ny: number }>>>([]);
   const [signName, setSignName] = useState("");
   const [selectedStampId, setSelectedStampId] = useState<string | null>(null);
+  const [selectedPictureId, setSelectedPictureId] = useState<string | null>(null);
+  const [pendingPicture, setPendingPicture] = useState<{
+    mime: "image/png" | "image/jpeg";
+    dataUrl: string;
+    aspect: number;
+  } | null>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
   const [signerIp, setSignerIp] = useState("");
   const [ipStatus, setIpStatus] = useState<"idle" | "loading" | "ready" | "missing">("idle");
 
@@ -113,7 +122,7 @@ export function EditorView() {
         <DropZone
           multiple={false}
           title="Drop a PDF to edit"
-          hint="Add text, highlight, draw, sign, rotate, and reorder pages. Files never leave this device."
+          hint="Add text, highlight, draw, sign, place images, rotate, and reorder pages. Files never leave this device."
         />
         <div className="flex justify-center">
           <Button variant="outline" onClick={() => void addSample("report")}>
@@ -130,6 +139,7 @@ export function EditorView() {
   const marks = highlights[doc.id] ?? [];
   const ink = strokes[doc.id] ?? [];
   const signs = stamps[doc.id] ?? [];
+  const pics = pictures[doc.id] ?? [];
   const selected = boxes.find((box) => box.id === selectedId) ?? null;
   const selectedMark = marks.find((mark) => mark.id === selectedMarkId) ?? null;
   const selectedStamp = signs.find((stamp) => stamp.id === selectedStampId) ?? null;
@@ -145,18 +155,22 @@ export function EditorView() {
     const currentMarks = state.highlights[doc.id] ?? [];
     const currentInk = state.strokes[doc.id] ?? [];
     const currentStamps = state.stamps[doc.id] ?? [];
+    const currentPics = state.pictures[doc.id] ?? [];
     let next = bytes;
     if (currentMarks.length) next = await applyHighlights(next, currentMarks);
+    if (currentPics.length) next = await applyPictures(next, currentPics);
     if (currentInk.length) next = await applyStrokes(next, currentInk);
     if (currentStamps.length) next = await applySignatures(next, currentStamps);
     if (currentBoxes.length) next = await applyTextBoxes(next, currentBoxes);
     if (currentMarks.length) clearHighlights(doc.id);
+    if (currentPics.length) clearPictures(doc.id);
     if (currentInk.length) clearStrokes(doc.id);
     if (currentStamps.length) clearStamps(doc.id);
     if (currentBoxes.length) clearTextBoxes(doc.id);
     setSelectedId(null);
     setSelectedMarkId(null);
     setSelectedStampId(null);
+    setSelectedPictureId(null);
     return next;
   }
 
@@ -242,9 +256,11 @@ export function EditorView() {
               setHighlightMode(false);
               setDrawMode(false);
               setSignMode(false);
+              setImageMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
+              setSelectedPictureId(null);
             }}
           >
             <Type />
@@ -258,9 +274,11 @@ export function EditorView() {
               setTextMode(false);
               setDrawMode(false);
               setSignMode(false);
+              setImageMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
+              setSelectedPictureId(null);
             }}
           >
             <Highlighter />
@@ -274,9 +292,11 @@ export function EditorView() {
               setTextMode(false);
               setHighlightMode(false);
               setSignMode(false);
+              setImageMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
+              setSelectedPictureId(null);
             }}
           >
             <PenTool />
@@ -290,13 +310,33 @@ export function EditorView() {
               setTextMode(false);
               setHighlightMode(false);
               setDrawMode(false);
+              setImageMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
+              setSelectedPictureId(null);
             }}
           >
             <Stamp />
             Sign
+          </ToolButton>
+          <ToolButton
+            label="Place an image"
+            pressed={imageMode}
+            onClick={() => {
+              setImageMode((on) => !on);
+              setTextMode(false);
+              setHighlightMode(false);
+              setDrawMode(false);
+              setSignMode(false);
+              setSelectedId(null);
+              setSelectedMarkId(null);
+              setSelectedStampId(null);
+              setSelectedPictureId(null);
+            }}
+          >
+            <ImageIcon />
+            Image
           </ToolButton>
           <span className="mx-2 hidden h-8 w-px bg-border sm:block" />
           <ToolButton
@@ -351,27 +391,6 @@ export function EditorView() {
             <Trash2 />
             Delete
           </ToolButton>
-          <span className="mx-2 hidden h-8 w-px bg-border sm:block" />
-          {COMING.map((item) => (
-            <Tooltip key={item.label}>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
-                  <button
-                    type="button"
-                    disabled
-                    className="inline-flex h-11 items-center gap-2 rounded-sm px-3 text-sm text-muted-foreground opacity-55"
-                  >
-                    <item.icon className="size-4" />
-                    <span className="hidden sm:inline">{item.label}</span>
-                    <Badge variant="soon" className="hidden md:inline-flex">
-                      Soon
-                    </Badge>
-                  </button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Coming in the full editor</TooltipContent>
-            </Tooltip>
-          ))}
         </div>
         {highlightMode && (
           <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -472,6 +491,44 @@ export function EditorView() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+        {imageMode && (
+          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <p className="text-sm text-muted-foreground sm:flex-1">
+              {pendingPicture
+                ? "Click the page to place the image. Drag a corner to resize."
+                : "Choose a photo, then click the page to place it."}
+            </p>
+            <input
+              ref={imageInput}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+              className="sr-only"
+              aria-label="Choose image"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                void readPageImage(file)
+                  .then(setPendingPicture)
+                  .catch((err) => {
+                    console.error(err);
+                    toast.error("Couldn’t read that image.");
+                  });
+              }}
+            />
+            <Button variant="outline" onClick={() => imageInput.current?.click()}>
+              <ImageIcon />
+              {pendingPicture ? "Change image" : "Choose image"}
+            </Button>
+            {pendingPicture && (
+              <img
+                src={pendingPicture.dataUrl}
+                alt=""
+                className="h-11 w-16 rounded-xs object-cover shadow-[var(--shadow-border)]"
+              />
+            )}
           </div>
         )}
         {textMode && (
@@ -676,6 +733,7 @@ export function EditorView() {
             penWidth={penWidth}
             zoom={zoom}
             signature={signature}
+            picture={pendingPicture}
             onSelect={setSelectedId}
             onAdd={onAddBox}
             onPatch={(id, patch) => patchTextBox(doc.id, id, patch)}
@@ -707,6 +765,19 @@ export function EditorView() {
               removeStamp(doc.id, id);
               if (selectedStampId === id) setSelectedStampId(null);
             }}
+            imageMode={imageMode}
+            pictures={pics}
+            selectedPictureId={selectedPictureId}
+            onSelectPicture={setSelectedPictureId}
+            onAddPicture={(item) => {
+              addPicture(doc.id, item);
+              setSelectedPictureId(item.id);
+            }}
+            onPatchPicture={(id, patch) => patchPicture(doc.id, id, patch)}
+            onRemovePicture={(id) => {
+              removePicture(doc.id, id);
+              if (selectedPictureId === id) setSelectedPictureId(null);
+            }}
           />
         </figure>
       </div>
@@ -724,6 +795,7 @@ export function EditorView() {
           {signs.length > 0
             ? ` · ${signs.length} signature${signs.length === 1 ? "" : "s"}`
             : ""}
+          {pics.length > 0 ? ` · ${pics.length} image${pics.length === 1 ? "" : "s"}` : ""}
         </p>
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
           File name

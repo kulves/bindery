@@ -51,6 +51,17 @@ export interface SignatureStamp {
   ip: string;
 }
 
+export interface PagePicture {
+  id: string;
+  page: number;
+  nx: number;
+  ny: number;
+  nw: number;
+  nh: number;
+  mime: "image/png" | "image/jpeg";
+  dataUrl: string;
+}
+
 export interface TextLine {
   id: string;
   str: string;
@@ -439,6 +450,49 @@ export async function applySignatures(bytes: Uint8Array, stamps: SignatureStamp[
   return pdf.save();
 }
 
+export async function applyPictures(bytes: Uint8Array, pictures: PagePicture[]): Promise<Uint8Array> {
+  if (pictures.length === 0) return bytes;
+  const pdfjs = await loadPdfjs();
+  const data = new Uint8Array(bytes.byteLength);
+  data.set(bytes);
+  const js = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
+  const pdf = await PDFDocument.load(bytes);
+
+  try {
+    const byPage = new Map<number, PagePicture[]>();
+    for (const picture of pictures) {
+      const list = byPage.get(picture.page) ?? [];
+      list.push(picture);
+      byPage.set(picture.page, list);
+    }
+
+    for (const [pageIndex, pagePics] of byPage) {
+      const page = pdf.getPages()[pageIndex];
+      const jsPage = await js.getPage(pageIndex + 1);
+      if (!page || !jsPage) continue;
+      const viewport = jsPage.getViewport({ scale: 1 });
+
+      for (const picture of pagePics) {
+        const rect = visualToPdf(viewport, picture);
+        const raw = dataUrlToBytes(picture.dataUrl);
+        const embedded =
+          picture.mime === "image/png" ? await pdf.embedPng(raw) : await pdf.embedJpg(raw);
+        page.drawImage(embedded, {
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+      jsPage.cleanup();
+    }
+  } finally {
+    await js.destroy();
+  }
+
+  return pdf.save();
+}
+
 function visualPointToPdf(
   viewport: { width: number; height: number; convertToPdfPoint: (x: number, y: number) => unknown[] },
   nx: number,
@@ -573,4 +627,44 @@ export async function fetchPublicIp(): Promise<string> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function readPageImage(file: File): Promise<{
+  mime: PagePicture["mime"];
+  dataUrl: string;
+  aspect: number;
+}> {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Couldn’t read that image."));
+      el.src = url;
+    });
+    const max = 1600;
+    const scale = Math.min(1, max / Math.max(image.width, image.height, 1));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Couldn’t read that image.");
+    ctx.drawImage(image, 0, 0, width, height);
+    const jpeg = file.type === "image/jpeg" || file.type === "image/jpg";
+    const mime: PagePicture["mime"] = jpeg ? "image/jpeg" : "image/png";
+    return { mime, dataUrl: canvas.toDataURL(mime, 0.86), aspect: width / height };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function dataUrlToBytes(dataUrl: string) {
+  const comma = dataUrl.indexOf(",");
+  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
