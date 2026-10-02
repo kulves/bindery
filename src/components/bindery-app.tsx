@@ -32,7 +32,7 @@ export function BinderyApp() {
               <Mark />
               <div>
                 <p className="font-display text-2xl leading-none tracking-tight">Bindery</p>
-                <p className="mt-1 text-xs text-primary-foreground/70">
+                <p className="mt-1 text-xs text-ember">
                   Split, merge, and shape PDFs on this device
                 </p>
               </div>
@@ -70,15 +70,16 @@ export function BinderyApp() {
         </header>
 
         <main className="relative flex-1 px-4 py-6 sm:px-6 sm:py-10">
+          {tool === "merge" && <MergeView />}
+          {tool === "split" && <SplitView />}
+          {tool === "edit" && <EditorView />}
+
           {docs.length > 0 && (
-            <p className="mx-auto mb-6 max-w-6xl text-xs text-muted-foreground">
+            <p className="mx-auto mt-8 max-w-6xl text-xs text-muted-foreground">
               {docs.length} document{docs.length === 1 ? "" : "s"} in the bench · processed in your
               browser
             </p>
           )}
-          {tool === "merge" && <MergeView />}
-          {tool === "split" && <SplitView />}
-          {tool === "edit" && <EditorView />}
 
           {busy && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/70">

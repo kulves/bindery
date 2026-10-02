@@ -241,12 +241,6 @@ export function EditorView() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
       <header className="flex flex-col gap-3">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Page editor
-          </p>
-          <h2 className="font-display text-3xl leading-tight">{doc.name}</h2>
-        </div>
         <div className="flex flex-wrap items-center gap-1 rounded-lg bg-card p-2 shadow-[var(--shadow-border)]">
           <ToolButton
             label="Add or edit text"
@@ -656,6 +650,19 @@ export function EditorView() {
             )}
           </div>
         )}
+        <div className="flex flex-col gap-3 rounded-xl bg-card p-3 shadow-[var(--shadow-border)] sm:flex-row sm:items-end">
+          <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
+            File name
+            <Input
+              value={outputName}
+              placeholder={`${doc.name}-edited`}
+              onChange={(event) => setOutputName(event.target.value)}
+            />
+          </label>
+          <Button size="lg" className="w-full sm:w-auto" disabled={busy} onClick={() => void onSave()}>
+            Save PDF
+          </Button>
+        </div>
       </header>
 
       {docs.length > 1 && (
@@ -782,8 +789,12 @@ export function EditorView() {
         </figure>
       </div>
 
-      <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-xl bg-card p-4 shadow-[var(--shadow-border)] sm:flex-row sm:items-center">
-        <p className="text-sm tabular-nums text-muted-foreground sm:flex-1">
+      <div className="flex flex-col gap-1">
+        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          Page editor
+        </p>
+        <h2 className="font-display text-2xl leading-tight">{doc.name}</h2>
+        <p className="text-sm tabular-nums text-muted-foreground">
           Page {page + 1} of {doc.pageCount}
           {boxes.length > 0
             ? ` · ${boxes.length} text change${boxes.length === 1 ? "" : "s"}`
@@ -797,17 +808,6 @@ export function EditorView() {
             : ""}
           {pics.length > 0 ? ` · ${pics.length} image${pics.length === 1 ? "" : "s"}` : ""}
         </p>
-        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
-          File name
-          <Input
-            value={outputName}
-            placeholder={`${doc.name}-edited`}
-            onChange={(event) => setOutputName(event.target.value)}
-          />
-        </label>
-        <Button size="lg" className="w-full sm:w-auto" disabled={busy} onClick={() => void onSave()}>
-          Save PDF
-        </Button>
       </div>
     </div>
   );
