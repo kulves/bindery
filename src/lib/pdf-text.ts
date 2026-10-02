@@ -1,8 +1,9 @@
 import { PDFDocument, StandardFonts, rgb, BlendMode, LineCapStyle, type PDFFont } from "pdf-lib";
 import { loadPdfjs } from "@/lib/pdf-render";
 
-export type TextFont = "sans" | "serif";
+export type TextFont = "sans" | "serif" | "mono";
 export type TextFill = "none" | "gray" | "blue" | "yellow";
+export type TextColor = "ink" | "gray" | "navy" | "red" | "green";
 
 export interface TextBox {
   id: string;
@@ -17,6 +18,7 @@ export interface TextBox {
   bold: boolean;
   italic: boolean;
   fill: TextFill;
+  color: TextColor;
   replace: boolean;
   sourceId?: string;
 }
@@ -83,6 +85,20 @@ export const TEXT_FILLS: Record<TextFill, { label: string; css: string; pdf: Ret
   gray: { label: "Light gray", css: "#e4e0d6", pdf: rgb(0.894, 0.878, 0.839) },
   blue: { label: "Light blue", css: "#d5e6f2", pdf: rgb(0.835, 0.902, 0.949) },
   yellow: { label: "Light yellow", css: "#f4ebb2", pdf: rgb(0.957, 0.922, 0.698) },
+};
+
+export const TEXT_FONTS: Record<TextFont, { label: string; className: string }> = {
+  sans: { label: "Helvetica", className: "font-sans" },
+  serif: { label: "Times", className: "font-display" },
+  mono: { label: "Courier", className: "font-mono" },
+};
+
+export const TEXT_COLORS: Record<TextColor, { label: string; css: string; pdf: ReturnType<typeof rgb> }> = {
+  ink: { label: "Ink", css: "#1c1916", pdf: rgb(0.11, 0.1, 0.09) },
+  gray: { label: "Gray", css: "#6e675c", pdf: rgb(0.431, 0.404, 0.361) },
+  navy: { label: "Navy", css: "#3d4f5c", pdf: rgb(0.239, 0.31, 0.361) },
+  red: { label: "Red", css: "#8f3d32", pdf: rgb(0.561, 0.239, 0.196) },
+  green: { label: "Green", css: "#2d6a4f", pdf: rgb(0.176, 0.416, 0.31) },
 };
 
 const WINANSI: Record<string, string> = {
@@ -208,6 +224,10 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
     serifB: await pdf.embedFont(StandardFonts.TimesRomanBold),
     serifI: await pdf.embedFont(StandardFonts.TimesRomanItalic),
     serifBi: await pdf.embedFont(StandardFonts.TimesRomanBoldItalic),
+    mono: await pdf.embedFont(StandardFonts.Courier),
+    monoB: await pdf.embedFont(StandardFonts.CourierBold),
+    monoI: await pdf.embedFont(StandardFonts.CourierOblique),
+    monoBi: await pdf.embedFont(StandardFonts.CourierBoldOblique),
   };
 
   try {
@@ -260,7 +280,13 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
         for (const line of lines) {
           if (baseline < y) break;
           if (line) {
-            page.drawText(line, { x, y: baseline, size, font, color: INK });
+            page.drawText(line, {
+              x,
+              y: baseline,
+              size,
+              font,
+              color: TEXT_COLORS[box.color ?? "ink"].pdf,
+            });
           }
           baseline -= size * 1.25;
         }
@@ -537,21 +563,20 @@ function pickFace(
     serifB: PDFFont;
     serifI: PDFFont;
     serifBi: PDFFont;
+    mono: PDFFont;
+    monoB: PDFFont;
+    monoI: PDFFont;
+    monoBi: PDFFont;
   },
   font: TextFont,
   bold: boolean,
   italic: boolean,
 ) {
-  if (font === "serif") {
-    if (bold && italic) return faces.serifBi;
-    if (bold) return faces.serifB;
-    if (italic) return faces.serifI;
-    return faces.serif;
-  }
-  if (bold && italic) return faces.sansBi;
-  if (bold) return faces.sansB;
-  if (italic) return faces.sansI;
-  return faces.sans;
+  const key = font === "serif" ? "serif" : font === "mono" ? "mono" : "sans";
+  if (bold && italic) return faces[`${key}Bi`];
+  if (bold) return faces[`${key}B`];
+  if (italic) return faces[`${key}I`];
+  return faces[key];
 }
 
 function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): string[] {

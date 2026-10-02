@@ -29,7 +29,7 @@ import {
   rotatePage,
   safeFilename,
 } from "@/lib/pdf";
-import { applyHighlights, applyPictures, applySignatures, applyStrokes, applyTextBoxes, fetchPublicIp, formatSignTime, readPageImage, TEXT_FILLS, type TextBox, type TextFill, type TextFont } from "@/lib/pdf-text";
+import { applyHighlights, applyPictures, applySignatures, applyStrokes, applyTextBoxes, fetchPublicIp, formatSignTime, readPageImage, TEXT_COLORS, TEXT_FILLS, TEXT_FONTS, type TextBox, type TextColor, type TextFill, type TextFont } from "@/lib/pdf-text";
 import { cn } from "@/lib/utils";
 import { useActiveDoc, useWorkspace } from "@/store/workspace";
 
@@ -87,6 +87,7 @@ export function EditorView() {
   const [bold, setBold] = useState(false);
   const [italic, setItalic] = useState(false);
   const [fill, setFill] = useState<TextFill>("none");
+  const [color, setColor] = useState<TextColor>("ink");
   const [penWidth, setPenWidth] = useState(3.2);
   const [zoom, setZoom] = useState(1);
   const [signPaths, setSignPaths] = useState<Array<Array<{ nx: number; ny: number }>>>([]);
@@ -547,7 +548,7 @@ export function EditorView() {
               />
             </label>
             <div className="flex rounded-full bg-card p-1">
-              {(["sans", "serif"] as const).map((item) => (
+              {(Object.keys(TEXT_FONTS) as TextFont[]).map((item) => (
                 <button
                   key={item}
                   type="button"
@@ -556,13 +557,14 @@ export function EditorView() {
                     if (selected) patchTextBox(doc.id, selected.id, { font: item });
                   }}
                   className={cn(
-                    "h-11 min-w-16 rounded-full px-3 text-sm capitalize",
+                    "h-11 min-w-16 rounded-full px-3 text-sm",
+                    TEXT_FONTS[item].className,
                     (selected?.font ?? font) === item
                       ? "bg-primary text-primary-foreground"
                       : "text-foreground hover:bg-muted",
                   )}
                 >
-                  {item === "sans" ? "Sans" : "Serif"}
+                  {TEXT_FONTS[item].label}
                 </button>
               ))}
             </div>
@@ -603,6 +605,30 @@ export function EditorView() {
               >
                 <Italic className="size-4" />
               </button>
+            </div>
+            <div className="flex items-center gap-1 rounded-full bg-card p-1">
+              {(Object.keys(TEXT_COLORS) as TextColor[]).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  aria-label={TEXT_COLORS[item].label}
+                  aria-pressed={(selected?.color ?? color) === item}
+                  title={TEXT_COLORS[item].label}
+                  onClick={() => {
+                    setColor(item);
+                    if (selected) patchTextBox(doc.id, selected.id, { color: item });
+                  }}
+                  className={cn(
+                    "flex size-11 items-center justify-center rounded-full",
+                    (selected?.color ?? color) === item ? "ring-2 ring-foreground" : "hover:bg-muted",
+                  )}
+                >
+                  <span
+                    className="block size-6 rounded-full ring-1 ring-border"
+                    style={{ backgroundColor: TEXT_COLORS[item].css }}
+                  />
+                </button>
+              ))}
             </div>
             <div className="flex items-center gap-1 rounded-full bg-card p-1">
               {(Object.keys(TEXT_FILLS) as TextFill[]).map((item) => (
@@ -737,6 +763,7 @@ export function EditorView() {
             bold={bold}
             italic={italic}
             fill={fill}
+            color={color}
             penWidth={penWidth}
             zoom={zoom}
             signature={signature}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Check, GripHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { extractPageLines, signMetaLines, TEXT_FILLS, type HighlightMark, type PagePicture, type SignatureStamp, type Stroke, type TextBox, type TextFill, type TextFont, type TextLine } from "@/lib/pdf-text";
+import { extractPageLines, signMetaLines, TEXT_COLORS, TEXT_FILLS, TEXT_FONTS, type HighlightMark, type PagePicture, type SignatureStamp, type Stroke, type TextBox, type TextColor, type TextFill, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
 
 interface PageStageProps {
@@ -27,6 +27,7 @@ interface PageStageProps {
   bold: boolean;
   italic: boolean;
   fill: TextFill;
+  color: TextColor;
   penWidth: number;
   zoom: number;
   signature: { kind: "draw" | "type"; paths: Array<Array<{ nx: number; ny: number }>>; text: string; ip: string } | null;
@@ -104,6 +105,7 @@ export function PageStage({
   bold,
   italic,
   fill,
+  color,
   penWidth,
   zoom,
   signature,
@@ -210,6 +212,7 @@ export function PageStage({
       bold,
       italic,
       fill,
+      color,
       replace: false,
     };
     onAdd(box);
@@ -275,6 +278,7 @@ export function PageStage({
       bold: false,
       italic: false,
       fill,
+      color,
       replace: true,
       sourceId: line.id,
     };
@@ -946,8 +950,8 @@ export function PageStage({
                 }
               }}
               className={cn(
-                "size-full resize-none px-1 py-0.5 leading-tight text-foreground outline-none placeholder:text-muted-foreground",
-                box.font === "serif" ? "font-display" : "font-sans",
+                "size-full resize-none px-1 py-0.5 leading-tight outline-none placeholder:text-muted-foreground",
+                TEXT_FONTS[box.font ?? "sans"].className,
                 box.bold && "font-bold",
                 box.italic && "italic",
                 box.size >= 28 ? "text-3xl" : box.size >= 20 ? "text-xl" : box.size >= 14 ? "text-base" : "text-sm",
@@ -955,6 +959,7 @@ export function PageStage({
               )}
               style={{
                 backgroundColor: TEXT_FILLS[box.fill ?? "none"].css,
+                color: TEXT_COLORS[box.color ?? "ink"].css,
               }}
             />
             {selected && (
