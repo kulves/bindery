@@ -124,6 +124,25 @@ export async function rotatePage(bytes: Uint8Array, index: number, delta = 90): 
   return src.save();
 }
 
+export async function insertBlankPage(bytes: Uint8Array, afterIndex: number): Promise<Uint8Array> {
+  const src = await PDFDocument.load(bytes);
+  const count = src.getPageCount();
+  const ref = src.getPages()[Math.max(0, Math.min(afterIndex, count - 1))];
+  const width = ref?.getWidth() ?? 612;
+  const height = ref?.getHeight() ?? 792;
+  const at = Math.min(Math.max(afterIndex + 1, 0), count);
+  const page = src.insertPage(at, [width, height]);
+  page.drawRectangle({ x: 0, y: 0, width, height, color: rgb(1, 1, 1) });
+  return src.save();
+}
+
+export async function createBlankDocument(): Promise<PdfDoc> {
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([612, 792]);
+  page.drawRectangle({ x: 0, y: 0, width: 612, height: 792, color: rgb(1, 1, 1) });
+  return loadPdfBytes(await pdf.save(), "Untitled.pdf");
+}
+
 export async function removePages(bytes: Uint8Array, indices: number[]): Promise<Uint8Array> {
   const src = await PDFDocument.load(bytes);
   const drop = new Set(indices);

@@ -76,7 +76,7 @@ export interface TextLine {
 
 const INK = rgb(0.11, 0.1, 0.09);
 const META = rgb(0.43, 0.4, 0.36);
-const COVER = rgb(0.98, 0.969, 0.941);
+const COVER = rgb(1, 1, 1);
 const MARK = rgb(0.91, 0.77, 0.28);
 const SIGN_META = 0.32;
 
@@ -265,8 +265,8 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
         const lines = wrapText(winAnsi(box.text), font, size, width - 2);
         const fill = TEXT_FILLS[box.fill ?? "none"]?.pdf ?? null;
         if (box.replace || fill) {
-          const padX = Math.max(2, size * 0.18);
-          const padY = Math.max(4, size * 0.38);
+          const padX = Math.max(4, size * 0.32);
+          const padY = Math.max(6, size * 0.58);
           page.drawRectangle({
             x: x - padX,
             y: y - padY,

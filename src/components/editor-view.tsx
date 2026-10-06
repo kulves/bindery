@@ -3,6 +3,7 @@ import {
   Bold,
   ChevronDown,
   ChevronUp,
+  FilePlus,
   Highlighter,
   ImageIcon,
   Italic,
@@ -20,10 +21,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropZone } from "@/components/drop-zone";
 import { PageStage } from "@/components/page-stage";
-import { addSample, rehydrate } from "@/lib/add-pdfs";
+import { addBlank, addSample, rehydrate } from "@/lib/add-pdfs";
 import {
   downloadBytes,
   getPageCount,
+  insertBlankPage,
   removePages,
   reorderPages,
   rotatePage,
@@ -33,7 +35,7 @@ import { applyHighlights, applyPictures, applySignatures, applyStrokes, applyTex
 import { cn } from "@/lib/utils";
 import { useActiveDoc, useWorkspace } from "@/store/workspace";
 
-const ZOOMS = [0.75, 1, 1.25, 1.5, 2] as const;
+const ZOOMS = [0.75, 1, 1.25, 1.5, 2, 2.5, 3, 3.5] as const;
 
 const PEN = [
   { id: "fine", label: "Fine", width: 1.8 },
@@ -125,7 +127,10 @@ export function EditorView() {
           title="Drop a PDF to edit"
           hint="Add text, highlight, draw, sign, place images, rotate, and reorder pages. Files never leave this device."
         />
-        <div className="flex justify-center">
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button variant="outline" onClick={() => void addBlank()}>
+            Start with a blank page
+          </Button>
           <Button variant="outline" onClick={() => void addSample("report")}>
             Try a 6-page sample
           </Button>
@@ -240,7 +245,7 @@ export function EditorView() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-4">
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-1 rounded-lg bg-card p-2 shadow-[var(--shadow-border)]">
           <ToolButton
@@ -376,6 +381,13 @@ export function EditorView() {
           >
             <ChevronDown />
             Down
+          </ToolButton>
+          <ToolButton
+            label="Add a blank page after this one"
+            onClick={() => void mutate("Adding page…", (bytes) => insertBlankPage(bytes, page), page + 1)}
+          >
+            <FilePlus />
+            Blank
           </ToolButton>
           <ToolButton
             label="Delete page"
@@ -745,7 +757,8 @@ export function EditorView() {
           ))}
         </ol>
 
-        <figure className="flex min-h-[50vh] max-h-[78vh] items-start justify-center overflow-auto rounded-xl bg-desk p-4 shadow-[var(--shadow-border)] sm:p-8">
+        <figure className="max-h-[82vh] w-full min-w-0 overflow-auto rounded-xl bg-desk p-3 shadow-[var(--shadow-border)] sm:p-4">
+          <div className="mx-auto" style={{ width: `${Math.max(0.5, zoom) * 100}%` }}>
           <PageStage
             bytes={doc.bytes}
             page={page}
@@ -765,7 +778,6 @@ export function EditorView() {
             fill={fill}
             color={color}
             penWidth={penWidth}
-            zoom={zoom}
             signature={signature}
             picture={pendingPicture}
             onSelect={setSelectedId}
@@ -813,6 +825,7 @@ export function EditorView() {
               if (selectedPictureId === id) setSelectedPictureId(null);
             }}
           />
+          </div>
         </figure>
       </div>
 

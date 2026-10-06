@@ -49,7 +49,7 @@ export async function renderThumbnails(
       }
       canvas.width = Math.max(1, Math.ceil(viewport.width));
       canvas.height = Math.max(1, Math.ceil(viewport.height));
-      ctx.fillStyle = "#faf7f0";
+      ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       await page.render({ canvasContext: ctx, viewport }).promise;
       onPage(i - 1, canvas.toDataURL("image/jpeg", 0.76));
@@ -78,7 +78,7 @@ export async function renderPageImage(
     if (!ctx) return "";
     canvas.width = Math.max(1, Math.ceil(viewport.width));
     canvas.height = Math.max(1, Math.ceil(viewport.height));
-    ctx.fillStyle = "#faf7f0";
+    ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: ctx, viewport }).promise;
     page.cleanup();

@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { createSampleDocument, loadPdfFile, type PdfDoc } from "@/lib/pdf";
+import { createBlankDocument, createSampleDocument, loadPdfFile, type PdfDoc } from "@/lib/pdf";
 import { renderThumbnails } from "@/lib/pdf-render";
 import { useWorkspace } from "@/store/workspace";
 
@@ -54,6 +54,17 @@ export async function addPdfFiles(fileList: FileList | File[] | File) {
   if (loaded.length === 0) return;
   useWorkspace.getState().addDocs(loaded);
   for (const doc of loaded) hydrateThumbs(doc);
+}
+
+export async function addBlank() {
+  try {
+    const doc = await createBlankDocument();
+    useWorkspace.getState().addDocs([doc]);
+    hydrateThumbs(doc);
+  } catch (err) {
+    console.error(err);
+    toast.error("Couldn’t add a blank page.");
+  }
 }
 
 export async function addSample(kind: "report" | "appendix") {

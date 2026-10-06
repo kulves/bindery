@@ -29,7 +29,6 @@ interface PageStageProps {
   fill: TextFill;
   color: TextColor;
   penWidth: number;
-  zoom: number;
   signature: { kind: "draw" | "type"; paths: Array<Array<{ nx: number; ny: number }>>; text: string; ip: string } | null;
   picture: { mime: PagePicture["mime"]; dataUrl: string; aspect: number } | null;
   onSelect: (id: string | null) => void;
@@ -107,7 +106,6 @@ export function PageStage({
   fill,
   color,
   penWidth,
-  zoom,
   signature,
   picture,
   onSelect,
@@ -261,10 +259,10 @@ export function PageStage({
       onSelect(existing.id);
       return;
     }
-    const ny = Math.max(0, line.ny - line.nh * 0.2);
-    const nh = Math.min(1 - ny, Math.max(line.nh * 1.55, MIN_H));
-    const nx = Math.max(0, line.nx - 0.006);
-    const nw = Math.min(1 - nx, Math.max(line.nw + 0.016, MIN_W));
+    const ny = Math.max(0, line.ny - line.nh * 0.35);
+    const nh = Math.min(1 - ny, Math.max(line.nh * 1.85, MIN_H));
+    const nx = Math.max(0, line.nx - 0.012);
+    const nw = Math.min(1 - nx, Math.max(line.nw + 0.028, MIN_W));
     const box: TextBox = {
       id: crypto.randomUUID(),
       page,
@@ -577,7 +575,7 @@ export function PageStage({
       onPointerMove={onStagePointerMove}
       onPointerUp={onStagePointerUp}
       className={cn(
-        "relative mx-auto w-max rounded-md bg-card shadow-[var(--shadow-page)]",
+        "relative w-full rounded-md bg-sheet shadow-[var(--shadow-page)]",
         highlightMode || signMode || drawMode || imageMode
           ? "cursor-crosshair"
           : textMode
@@ -590,17 +588,10 @@ export function PageStage({
           src={preview}
           alt=""
           draggable={false}
-          className="pointer-events-none block w-auto overflow-hidden rounded-md"
-          style={{
-            height: `${70 * zoom}vh`,
-            maxWidth: zoom <= 1 ? "100%" : "none",
-          }}
+          className="pointer-events-none block h-auto w-full overflow-hidden rounded-md"
         />
       ) : (
-        <div
-          className="page-skeleton aspect-[8.5/11] w-auto rounded-md"
-          style={{ height: `${70 * zoom}vh` }}
-        />
+        <div className="page-skeleton aspect-[8.5/11] w-full rounded-md" />
       )}
 
       {pageMarks.map((mark) => {
@@ -958,7 +949,10 @@ export function PageStage({
                 !selected && "pointer-events-none",
               )}
               style={{
-                backgroundColor: TEXT_FILLS[box.fill ?? "none"].css,
+                backgroundColor:
+                  box.replace && (box.fill ?? "none") === "none"
+                    ? "var(--color-sheet)"
+                    : TEXT_FILLS[box.fill ?? "none"].css,
                 color: TEXT_COLORS[box.color ?? "ink"].css,
               }}
             />
