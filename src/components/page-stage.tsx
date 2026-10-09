@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Check, GripHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useWorkspace } from "@/store/workspace";
 import { extractPageLines, signMetaLines, TEXT_COLORS, TEXT_FILLS, TEXT_FONTS, type HighlightMark, type PagePicture, type SignatureStamp, type Stroke, type TextBox, type TextColor, type TextFill, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
 
 interface PageStageProps {
+  docId: string;
   bytes: Uint8Array;
   page: number;
   fallback?: string;
@@ -82,6 +84,7 @@ const MIN_W = 0.06;
 const MIN_H = 0.024;
 
 export function PageStage({
+  docId,
   bytes,
   page,
   fallback,
@@ -126,6 +129,8 @@ export function PageStage({
   onPatchPicture,
   onRemovePicture,
 }: PageStageProps) {
+  const beginGesture = useWorkspace((s) => s.beginGesture);
+  const endGesture = useWorkspace((s) => s.endGesture);
   const stageRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState(fallback ?? "");
   const [lines, setLines] = useState<TextLine[]>([]);
@@ -383,6 +388,7 @@ export function PageStage({
   }
 
   function beginMove(event: ReactPointerEvent, box: TextBox) {
+    beginGesture(docId);
     drag.current = {
       kind: "move",
       target: "box",
@@ -408,6 +414,7 @@ export function PageStage({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    beginGesture(docId);
     drag.current = {
       kind: "resize",
       target: "box",
@@ -429,6 +436,7 @@ export function PageStage({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    beginGesture(docId);
     drag.current = {
       kind: "move",
       target: "stamp",
@@ -450,6 +458,7 @@ export function PageStage({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    beginGesture(docId);
     drag.current = {
       kind: "resize",
       target: "stamp",
@@ -466,11 +475,11 @@ export function PageStage({
   }
 
   function onPicturePointerDown(event: ReactPointerEvent<HTMLDivElement>, item: PagePicture) {
-    if (!imageMode) return;
     if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    beginGesture(docId);
     drag.current = {
       kind: "move",
       target: "picture",
@@ -492,6 +501,7 @@ export function PageStage({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
+    beginGesture(docId);
     drag.current = {
       kind: "resize",
       target: "picture",
@@ -563,6 +573,7 @@ export function PageStage({
 
   function onDragUp() {
     drag.current = null;
+    endGesture();
   }
 
   return (
@@ -706,7 +717,7 @@ export function PageStage({
             onPointerUp={onDragUp}
             onClick={(event) => event.stopPropagation()}
             className={cn(
-              "absolute overflow-hidden bg-card",
+              "absolute bg-card",
               selected ? "z-10 ring-2 ring-foreground" : "ring-1 ring-accent/40",
             )}
             style={{
@@ -716,7 +727,9 @@ export function PageStage({
               height: `${item.nh * 100}%`,
             }}
           >
-            <img src={item.dataUrl} alt="" draggable={false} className="pointer-events-none size-full object-fill" />
+            <div className="size-full overflow-hidden">
+              <img src={item.dataUrl} alt="" draggable={false} className="pointer-events-none size-full object-fill" />
+            </div>
             {selected && (
               <div className="absolute -top-12 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1">
                 <button
@@ -736,10 +749,12 @@ export function PageStage({
                   type="button"
                   data-move
                   aria-label="Move image"
+                  title="Drag to move"
                   onPointerDown={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
                     event.currentTarget.setPointerCapture(event.pointerId);
+                    beginGesture(docId);
                     drag.current = {
                       kind: "move",
                       target: "picture",
@@ -855,6 +870,7 @@ export function PageStage({
                   event.preventDefault();
                   event.stopPropagation();
                   event.currentTarget.setPointerCapture(event.pointerId);
+                  beginGesture(docId);
                   drag.current = {
                     kind: "move",
                     target: "stamp",
@@ -923,7 +939,11 @@ export function PageStage({
               autoFocus={selected}
               placeholder="Type here"
               aria-label="Text box"
-              onFocus={() => onSelect(box.id)}
+              onFocus={() => {
+                beginGesture(docId);
+                onSelect(box.id);
+              }}
+              onBlur={() => endGesture()}
               onChange={(event) => onPatch(box.id, { text: event.target.value })}
               onKeyDown={(event) => {
                 if (event.key === "Escape") onSelect(null);

@@ -76,6 +76,9 @@ export function EditorView() {
   const patchPicture = useWorkspace((s) => s.patchPicture);
   const removePicture = useWorkspace((s) => s.removePicture);
   const clearPictures = useWorkspace((s) => s.clearPictures);
+  const undo = useWorkspace((s) => s.undo);
+  const redo = useWorkspace((s) => s.redo);
+  const beginGesture = useWorkspace((s) => s.beginGesture);
   const [focus, setFocus] = useState(0);
   const [textMode, setTextMode] = useState(false);
   const [highlightMode, setHighlightMode] = useState(false);
@@ -118,6 +121,170 @@ export function EditorView() {
       alive = false;
     };
   }, [signMode]);
+
+  useEffect(() => {
+    if (!doc) return;
+    const docId = doc.id;
+    const pageCount = doc.pageCount;
+
+    function isTyping(target: EventTarget | null) {
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      return el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable;
+    }
+
+    function stepPage(dir: -1 | 1) {
+      setFocus((value) => Math.min(pageCount - 1, Math.max(0, value + dir)));
+      setSelectedId(null);
+      setSelectedMarkId(null);
+      setSelectedStampId(null);
+      setSelectedPictureId(null);
+    }
+
+    function nudge(dx: number, dy: number) {
+      const state = useWorkspace.getState();
+      const clampPos = (value: number, span: number) => Math.min(Math.max(0, value), Math.max(0, 1 - span));
+      if (selectedPictureId) {
+        const item = (state.pictures[docId] ?? []).find((pic) => pic.id === selectedPictureId);
+        if (!item) return;
+        beginGesture(docId);
+        patchPicture(docId, item.id, { nx: clampPos(item.nx + dx, item.nw), ny: clampPos(item.ny + dy, item.nh) });
+        return;
+      }
+      if (selectedStampId) {
+        const item = (state.stamps[docId] ?? []).find((stamp) => stamp.id === selectedStampId);
+        if (!item) return;
+        beginGesture(docId);
+        patchStamp(docId, item.id, { nx: clampPos(item.nx + dx, item.nw), ny: clampPos(item.ny + dy, item.nh) });
+        return;
+      }
+      if (selectedMarkId) {
+        const item = (state.highlights[docId] ?? []).find((mark) => mark.id === selectedMarkId);
+        if (!item) return;
+        beginGesture(docId);
+        patchHighlight(docId, item.id, { nx: clampPos(item.nx + dx, item.nw), ny: clampPos(item.ny + dy, item.nh) });
+        return;
+      }
+      if (selectedId) {
+        const item = (state.textBoxes[docId] ?? []).find((box) => box.id === selectedId);
+        if (!item) return;
+        beginGesture(docId);
+        patchTextBox(docId, item.id, { nx: clampPos(item.nx + dx, item.nw), ny: clampPos(item.ny + dy, item.nh) });
+      }
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      const meta = event.metaKey || event.ctrlKey;
+      const key = event.key;
+      if (meta && key.toLowerCase() === "z") {
+        event.preventDefault();
+        if (event.shiftKey) redo(docId);
+        else undo(docId);
+        return;
+      }
+      if (meta && key.toLowerCase() === "y") {
+        event.preventDefault();
+        redo(docId);
+        return;
+      }
+      if (isTyping(event.target)) return;
+
+      if (key === "Escape") {
+        setSelectedId(null);
+        setSelectedMarkId(null);
+        setSelectedStampId(null);
+        setSelectedPictureId(null);
+        return;
+      }
+
+      const selectedSomething = Boolean(selectedId || selectedPictureId || selectedStampId || selectedMarkId);
+      if (!selectedSomething && (key === "PageUp" || key === "ArrowUp" || key === "ArrowLeft")) {
+        event.preventDefault();
+        stepPage(-1);
+        return;
+      }
+      if (!selectedSomething && (key === "PageDown" || key === "ArrowDown" || key === "ArrowRight")) {
+        event.preventDefault();
+        stepPage(1);
+        return;
+      }
+      if (selectedSomething && (key === "PageUp" || key === "PageDown")) {
+        event.preventDefault();
+        stepPage(key === "PageUp" ? -1 : 1);
+        return;
+      }
+
+      if (key === "Delete" || key === "Backspace") {
+        event.preventDefault();
+        useWorkspace.getState().endGesture();
+        if (selectedPictureId) {
+          removePicture(docId, selectedPictureId);
+          setSelectedPictureId(null);
+        } else if (selectedStampId) {
+          removeStamp(docId, selectedStampId);
+          setSelectedStampId(null);
+        } else if (selectedMarkId) {
+          removeHighlight(docId, selectedMarkId);
+          setSelectedMarkId(null);
+        } else if (selectedId) {
+          removeTextBox(docId, selectedId);
+          setSelectedId(null);
+        }
+        return;
+      }
+
+      if (selectedSomething && (key === "ArrowLeft" || key === "ArrowRight" || key === "ArrowUp" || key === "ArrowDown")) {
+        event.preventDefault();
+        const step = event.shiftKey ? 0.02 : 0.006;
+        const dx = key === "ArrowLeft" ? -step : key === "ArrowRight" ? step : 0;
+        const dy = key === "ArrowUp" ? -step : key === "ArrowDown" ? step : 0;
+        nudge(dx, dy);
+        return;
+      }
+
+      if (key === "+" || key === "=") {
+        event.preventDefault();
+        setZoom((value) => {
+          const index = ZOOMS.indexOf(value as (typeof ZOOMS)[number]);
+          return ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, index) + 1)] ?? value;
+        });
+      } else if (key === "-" || key === "_") {
+        event.preventDefault();
+        setZoom((value) => {
+          const index = ZOOMS.indexOf(value as (typeof ZOOMS)[number]);
+          return ZOOMS[Math.max(0, index - 1)] ?? value;
+        });
+      }
+    }
+
+    function onKeyUp(event: KeyboardEvent) {
+      if (event.key.startsWith("Arrow")) useWorkspace.getState().endGesture();
+    }
+
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keyup", onKeyUp, true);
+    };
+  }, [
+    doc,
+    beginGesture,
+    redo,
+    undo,
+    selectedId,
+    selectedPictureId,
+    selectedStampId,
+    selectedMarkId,
+    patchPicture,
+    patchStamp,
+    patchHighlight,
+    patchTextBox,
+    removePicture,
+    removeStamp,
+    removeHighlight,
+    removeTextBox,
+  ]);
 
   if (docs.length === 0) {
     return (
@@ -760,6 +927,7 @@ export function EditorView() {
         <figure className="max-h-[82vh] w-full min-w-0 overflow-auto rounded-xl bg-desk p-3 shadow-[var(--shadow-border)] sm:p-4">
           <div className="mx-auto" style={{ width: `${Math.max(0.5, zoom) * 100}%` }}>
           <PageStage
+            docId={doc.id}
             bytes={doc.bytes}
             page={page}
             fallback={doc.thumbs[page]}
@@ -847,6 +1015,9 @@ export function EditorView() {
             ? ` · ${signs.length} signature${signs.length === 1 ? "" : "s"}`
             : ""}
           {pics.length > 0 ? ` · ${pics.length} image${pics.length === 1 ? "" : "s"}` : ""}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · arrows nudge · +/− zoom
         </p>
       </div>
     </div>

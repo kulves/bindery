@@ -18,6 +18,10 @@ interface WorkspaceState {
   outputName: string;
   busy: boolean;
   busyLabel: string;
+  past: Record<string, LayerSnap[]>;
+  future: Record<string, LayerSnap[]>;
+  gesture: string | null;
+  gestureSaved: boolean;
   setTool: (tool: ToolId) => void;
   addDocs: (docs: PdfDoc[]) => void;
   removeDoc: (id: string) => void;
@@ -54,6 +58,10 @@ interface WorkspaceState {
   setEveryN: (n: number) => void;
   setOutputName: (name: string) => void;
   setBusy: (busy: boolean, label?: string) => void;
+  beginGesture: (docId: string) => void;
+  endGesture: () => void;
+  undo: (docId: string) => void;
+  redo: (docId: string) => void;
   reset: () => void;
 }
 
@@ -73,7 +81,51 @@ const INITIAL = {
   outputName: "",
   busy: false,
   busyLabel: "",
+  past: {} as Record<string, LayerSnap[]>,
+  future: {} as Record<string, LayerSnap[]>,
+  gesture: null as string | null,
+  gestureSaved: false,
 };
+
+type LayerSnap = {
+  textBoxes: TextBox[];
+  highlights: HighlightMark[];
+  strokes: Stroke[];
+  stamps: SignatureStamp[];
+  pictures: PagePicture[];
+};
+
+function readLayers(state: { textBoxes: Record<string, TextBox[]>; highlights: Record<string, HighlightMark[]>; strokes: Record<string, Stroke[]>; stamps: Record<string, SignatureStamp[]>; pictures: Record<string, PagePicture[]> }, docId: string): LayerSnap {
+  return {
+    textBoxes: state.textBoxes[docId] ?? [],
+    highlights: state.highlights[docId] ?? [],
+    strokes: state.strokes[docId] ?? [],
+    stamps: state.stamps[docId] ?? [],
+    pictures: state.pictures[docId] ?? [],
+  };
+}
+
+function checkpoint<T extends { past: Record<string, LayerSnap[]>; future: Record<string, LayerSnap[]>; gesture: string | null; gestureSaved: boolean; textBoxes: Record<string, TextBox[]>; highlights: Record<string, HighlightMark[]>; strokes: Record<string, Stroke[]>; stamps: Record<string, SignatureStamp[]>; pictures: Record<string, PagePicture[]> }>(state: T, docId: string) {
+  if (state.gesture === docId && state.gestureSaved) {
+    return { past: state.past, future: state.future };
+  }
+  const snap = readLayers(state, docId);
+  return {
+    past: { ...state.past, [docId]: [...(state.past[docId] ?? []).slice(-39), snap] },
+    future: { ...state.future, [docId]: [] },
+    gestureSaved: state.gesture === docId,
+  };
+}
+
+function restore<T extends { textBoxes: Record<string, TextBox[]>; highlights: Record<string, HighlightMark[]>; strokes: Record<string, Stroke[]>; stamps: Record<string, SignatureStamp[]>; pictures: Record<string, PagePicture[]> }>(state: T, docId: string, snap: LayerSnap) {
+  return {
+    textBoxes: { ...state.textBoxes, [docId]: snap.textBoxes },
+    highlights: { ...state.highlights, [docId]: snap.highlights },
+    strokes: { ...state.strokes, [docId]: snap.strokes },
+    stamps: { ...state.stamps, [docId]: snap.stamps },
+    pictures: { ...state.pictures, [docId]: snap.pictures },
+  };
+}
 
 export const useWorkspace = create<WorkspaceState>((set) => ({
   ...INITIAL,
@@ -207,10 +259,12 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   clearSelected: (id) => set((state) => ({ selected: { ...state.selected, [id]: [] } })),
   addTextBox: (docId, box) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       textBoxes: { ...state.textBoxes, [docId]: [...(state.textBoxes[docId] ?? []), box] },
     })),
   patchTextBox: (docId, id, patch) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       textBoxes: {
         ...state.textBoxes,
         [docId]: (state.textBoxes[docId] ?? []).map((box) => (box.id === id ? { ...box, ...patch } : box)),
@@ -218,6 +272,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     })),
   removeTextBox: (docId, id) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       textBoxes: {
         ...state.textBoxes,
         [docId]: (state.textBoxes[docId] ?? []).filter((box) => box.id !== id),
@@ -229,10 +284,12 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     })),
   addHighlight: (docId, mark) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       highlights: { ...state.highlights, [docId]: [...(state.highlights[docId] ?? []), mark] },
     })),
   patchHighlight: (docId, id, patch) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       highlights: {
         ...state.highlights,
         [docId]: (state.highlights[docId] ?? []).map((mark) => (mark.id === id ? { ...mark, ...patch } : mark)),
@@ -240,6 +297,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     })),
   removeHighlight: (docId, id) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       highlights: {
         ...state.highlights,
         [docId]: (state.highlights[docId] ?? []).filter((mark) => mark.id !== id),
@@ -251,10 +309,12 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     })),
   addStroke: (docId, stroke) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       strokes: { ...state.strokes, [docId]: [...(state.strokes[docId] ?? []), stroke] },
     })),
   undoStroke: (docId) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       strokes: { ...state.strokes, [docId]: (state.strokes[docId] ?? []).slice(0, -1) },
     })),
   clearStrokes: (docId) =>
@@ -263,10 +323,12 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     })),
   addStamp: (docId, stamp) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       stamps: { ...state.stamps, [docId]: [...(state.stamps[docId] ?? []), stamp] },
     })),
   patchStamp: (docId, id, patch) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       stamps: {
         ...state.stamps,
         [docId]: (state.stamps[docId] ?? []).map((stamp) => (stamp.id === id ? { ...stamp, ...patch } : stamp)),
@@ -274,6 +336,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     })),
   removeStamp: (docId, id) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       stamps: {
         ...state.stamps,
         [docId]: (state.stamps[docId] ?? []).filter((stamp) => stamp.id !== id),
@@ -285,17 +348,22 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     })),
   addPicture: (docId, picture) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       pictures: { ...state.pictures, [docId]: [...(state.pictures[docId] ?? []), picture] },
     })),
   patchPicture: (docId, id, patch) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       pictures: {
         ...state.pictures,
-        [docId]: (state.pictures[docId] ?? []).map((picture) => (picture.id === id ? { ...picture, ...patch } : picture)),
+        [docId]: (state.pictures[docId] ?? []).map((picture) =>
+          picture.id === id ? { ...picture, ...patch } : picture,
+        ),
       },
     })),
   removePicture: (docId, id) =>
     set((state) => ({
+      ...checkpoint(state, docId),
       pictures: {
         ...state.pictures,
         [docId]: (state.pictures[docId] ?? []).filter((picture) => picture.id !== id),
@@ -310,6 +378,37 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   setEveryN: (everyN) => set({ everyN }),
   setOutputName: (outputName) => set({ outputName }),
   setBusy: (busy, busyLabel = "") => set({ busy, busyLabel }),
+  beginGesture: (docId) =>
+    set((state) => (state.gesture === docId ? state : { gesture: docId, gestureSaved: false })),
+  endGesture: () => set({ gesture: null, gestureSaved: false }),
+  undo: (docId) =>
+    set((state) => {
+      const stack = state.past[docId] ?? [];
+      const prev = stack[stack.length - 1];
+      if (!prev) return { gesture: null, gestureSaved: false };
+      const current = readLayers(state, docId);
+      return {
+        ...restore(state, docId, prev),
+        past: { ...state.past, [docId]: stack.slice(0, -1) },
+        future: { ...state.future, [docId]: [...(state.future[docId] ?? []), current].slice(-40) },
+        gesture: null,
+        gestureSaved: false,
+      };
+    }),
+  redo: (docId) =>
+    set((state) => {
+      const stack = state.future[docId] ?? [];
+      const next = stack[stack.length - 1];
+      if (!next) return state;
+      const current = readLayers(state, docId);
+      return {
+        ...restore(state, docId, next),
+        future: { ...state.future, [docId]: stack.slice(0, -1) },
+        past: { ...state.past, [docId]: [...(state.past[docId] ?? []), current].slice(-40) },
+        gesture: null,
+        gestureSaved: false,
+      };
+    }),
   reset: () => set({ ...INITIAL }),
 }));
 
