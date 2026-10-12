@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   FilePlus,
+  Hand,
   Highlighter,
   ImageIcon,
   Italic,
@@ -35,7 +36,15 @@ import { applyHighlights, applyPictures, applySignatures, applyStrokes, applyTex
 import { cn } from "@/lib/utils";
 import { useActiveDoc, useWorkspace } from "@/store/workspace";
 
-const ZOOMS = [0.75, 1, 1.25, 1.5, 2, 2.5, 3, 3.5] as const;
+const ZOOM_MIN = 0.04;
+const ZOOM_MAX = 7;
+
+function stepZoom(value: number, dir: -1 | 1) {
+  const next = dir > 0 ? value * 1.25 : value / 1.25;
+  const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next));
+  if (Math.abs(clamped - 1) < 0.05) return 1;
+  return Math.round(clamped * 100) / 100;
+}
 
 const PEN = [
   { id: "fine", label: "Fine", width: 1.8 },
@@ -85,6 +94,8 @@ export function EditorView() {
   const [drawMode, setDrawMode] = useState(false);
   const [signMode, setSignMode] = useState(false);
   const [imageMode, setImageMode] = useState(false);
+  const [handMode, setHandMode] = useState(false);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null);
   const [font, setFont] = useState<TextFont>("sans");
@@ -105,6 +116,7 @@ export function EditorView() {
     aspect: number;
   } | null>(null);
   const imageInput = useRef<HTMLInputElement>(null);
+  const panDrag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const [signerIp, setSignerIp] = useState("");
   const [ipStatus, setIpStatus] = useState<"idle" | "loading" | "ready" | "missing">("idle");
 
@@ -244,16 +256,10 @@ export function EditorView() {
 
       if (key === "+" || key === "=") {
         event.preventDefault();
-        setZoom((value) => {
-          const index = ZOOMS.indexOf(value as (typeof ZOOMS)[number]);
-          return ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, index) + 1)] ?? value;
-        });
+        setZoom((value) => stepZoom(value, 1));
       } else if (key === "-" || key === "_") {
         event.preventDefault();
-        setZoom((value) => {
-          const index = ZOOMS.indexOf(value as (typeof ZOOMS)[number]);
-          return ZOOMS[Math.max(0, index - 1)] ?? value;
-        });
+        setZoom((value) => stepZoom(value, -1));
       }
     }
 
@@ -411,6 +417,25 @@ export function EditorView() {
     setSelectedId(box.id);
   }
 
+  function onPanDown(event: ReactPointerEvent<HTMLElement>) {
+    if (!handMode) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button, textarea, input, a")) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panDrag.current = { x: event.clientX, y: event.clientY, px: pan.x, py: pan.y };
+  }
+
+  function onPanMove(event: ReactPointerEvent<HTMLElement>) {
+    const drag = panDrag.current;
+    if (!drag) return;
+    setPan({ x: drag.px + event.clientX - drag.x, y: drag.py + event.clientY - drag.y });
+  }
+
+  function onPanUp() {
+    panDrag.current = null;
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-4">
       <header className="flex flex-col gap-3">
@@ -424,6 +449,7 @@ export function EditorView() {
               setDrawMode(false);
               setSignMode(false);
               setImageMode(false);
+              setHandMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -442,6 +468,7 @@ export function EditorView() {
               setDrawMode(false);
               setSignMode(false);
               setImageMode(false);
+              setHandMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -460,6 +487,7 @@ export function EditorView() {
               setHighlightMode(false);
               setSignMode(false);
               setImageMode(false);
+              setHandMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -478,6 +506,7 @@ export function EditorView() {
               setHighlightMode(false);
               setDrawMode(false);
               setImageMode(false);
+              setHandMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -496,6 +525,7 @@ export function EditorView() {
               setHighlightMode(false);
               setDrawMode(false);
               setSignMode(false);
+              setHandMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -505,28 +535,46 @@ export function EditorView() {
             <ImageIcon />
             Image
           </ToolButton>
-          <span className="mx-2 hidden h-8 w-px bg-border sm:block" />
           <ToolButton
-            label="Zoom out"
-            disabled={zoom <= ZOOMS[0]}
-            onClick={() => setZoom((value) => ZOOMS[Math.max(0, ZOOMS.indexOf(value as (typeof ZOOMS)[number]) - 1)] ?? value)}
+            label="Drag the page"
+            pressed={handMode}
+            onClick={() => {
+              setHandMode((on) => !on);
+              setTextMode(false);
+              setHighlightMode(false);
+              setDrawMode(false);
+              setSignMode(false);
+              setImageMode(false);
+              setSelectedId(null);
+              setSelectedMarkId(null);
+              setSelectedStampId(null);
+              setSelectedPictureId(null);
+            }}
           >
+            <Hand />
+            Hand
+          </ToolButton>
+          <span className="mx-2 hidden h-8 w-px bg-border sm:block" />
+          <ToolButton label="Zoom out" disabled={zoom <= ZOOM_MIN} onClick={() => setZoom((value) => stepZoom(value, -1))}>
             <ZoomOut />
             Out
           </ToolButton>
-          <span className="min-w-14 px-1 text-center text-sm tabular-nums text-muted-foreground">
-            {Math.round(zoom * 100)}%
-          </span>
-          <ToolButton
-            label="Zoom in"
-            disabled={zoom >= ZOOMS[ZOOMS.length - 1]!}
-            onClick={() =>
-              setZoom((value) => {
-                const index = ZOOMS.indexOf(value as (typeof ZOOMS)[number]);
-                return ZOOMS[Math.min(ZOOMS.length - 1, index + 1)] ?? value;
-              })
-            }
-          >
+          <label className="flex items-center gap-2 px-1">
+            <input
+              type="range"
+              min={4}
+              max={700}
+              step={1}
+              value={Math.round(zoom * 100)}
+              aria-label="Zoom"
+              onChange={(event) => setZoom(Number(event.target.value) / 100)}
+              className="h-1.5 w-24 cursor-pointer accent-primary"
+            />
+            <span className="min-w-12 text-center text-sm tabular-nums text-muted-foreground">
+              {Math.round(zoom * 100)}%
+            </span>
+          </label>
+          <ToolButton label="Zoom in" disabled={zoom >= ZOOM_MAX} onClick={() => setZoom((value) => stepZoom(value, 1))}>
             <ZoomIn />
             In
           </ToolButton>
@@ -924,8 +972,23 @@ export function EditorView() {
           ))}
         </ol>
 
-        <figure className="max-h-[82vh] w-full min-w-0 overflow-auto rounded-xl bg-desk p-3 shadow-[var(--shadow-border)] sm:p-4">
-          <div className="mx-auto" style={{ width: `${Math.max(0.5, zoom) * 100}%` }}>
+        <figure
+          className={cn(
+            "relative h-[82vh] w-full min-w-0 overflow-hidden rounded-xl bg-desk shadow-[var(--shadow-border)] [container-type:size]",
+            handMode && "cursor-grab active:cursor-grabbing",
+          )}
+          onPointerDown={onPanDown}
+          onPointerMove={onPanMove}
+          onPointerUp={onPanUp}
+          onPointerCancel={onPanUp}
+        >
+          <div
+            className="absolute top-1/2 left-1/2"
+            style={{
+              width: "min(96cqw, calc(92cqh * 8.5 / 11))",
+              transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom})`,
+            }}
+          >
           <PageStage
             docId={doc.id}
             bytes={doc.bytes}
@@ -934,6 +997,7 @@ export function EditorView() {
             textMode={textMode}
             highlightMode={highlightMode}
             drawMode={drawMode}
+            handMode={handMode}
             boxes={boxes}
             marks={marks}
             strokes={ink}
@@ -1017,7 +1081,7 @@ export function EditorView() {
           {pics.length > 0 ? ` · ${pics.length} image${pics.length === 1 ? "" : "s"}` : ""}
         </p>
         <p className="text-xs text-muted-foreground">
-          Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · arrows nudge · +/− zoom
+          Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · Hand drags the page · +/− zoom
         </p>
       </div>
     </div>

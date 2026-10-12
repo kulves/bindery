@@ -13,6 +13,7 @@ interface PageStageProps {
   textMode: boolean;
   highlightMode: boolean;
   drawMode: boolean;
+  handMode: boolean;
   signMode: boolean;
   imageMode: boolean;
   boxes: TextBox[];
@@ -91,6 +92,7 @@ export function PageStage({
   textMode,
   highlightMode,
   drawMode,
+  handMode,
   signMode,
   imageMode,
   boxes,
@@ -188,6 +190,7 @@ export function PageStage({
   }
 
   function placeBox(event: React.MouseEvent<HTMLDivElement>) {
+    if (handMode) return;
     if (event.target !== event.currentTarget) return;
     const point = pointFromEvent(event);
     if (!point) return;
@@ -309,7 +312,7 @@ export function PageStage({
   }
 
   function onStagePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!highlightMode) return;
+    if (handMode || !highlightMode) return;
     if (event.target !== event.currentTarget) return;
     const point = pointFromEvent(event);
     if (!point) return;
@@ -351,7 +354,7 @@ export function PageStage({
   }
 
   function onDrawPointerDown(event: ReactPointerEvent<SVGSVGElement>) {
-    if (!drawMode) return;
+    if (handMode || !drawMode) return;
     const point = pointFromEvent(event);
     if (!point) return;
     event.preventDefault();
@@ -379,7 +382,7 @@ export function PageStage({
   }
 
   function onBoxPointerDown(event: ReactPointerEvent<HTMLDivElement>, box: TextBox) {
-    if (!textMode) return;
+    if (handMode || !textMode) return;
     if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
     if ((event.target as HTMLElement).tagName === "TEXTAREA") return;
     event.preventDefault();
@@ -431,7 +434,7 @@ export function PageStage({
   }
 
   function onStampPointerDown(event: ReactPointerEvent<HTMLDivElement>, stamp: SignatureStamp) {
-    if (!signMode) return;
+    if (handMode || !signMode) return;
     if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
     event.preventDefault();
     event.stopPropagation();
@@ -475,6 +478,7 @@ export function PageStage({
   }
 
   function onPicturePointerDown(event: ReactPointerEvent<HTMLDivElement>, item: PagePicture) {
+    if (handMode) return;
     if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
     event.preventDefault();
     event.stopPropagation();
@@ -587,7 +591,9 @@ export function PageStage({
       onPointerUp={onStagePointerUp}
       className={cn(
         "relative w-full rounded-md bg-sheet shadow-[var(--shadow-page)]",
-        highlightMode || signMode || drawMode || imageMode
+        handMode
+          ? "cursor-grab"
+          : highlightMode || signMode || drawMode || imageMode
           ? "cursor-crosshair"
           : textMode
             ? "cursor-text"
