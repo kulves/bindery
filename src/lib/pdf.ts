@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import JSZip from "jszip";
 
-export type ToolId = "merge" | "split" | "edit";
+export type ToolId = "merge" | "split" | "edit" | "word";
 export type SplitMode = "extract" | "ranges" | "every" | "each";
 
 export interface PdfDoc {

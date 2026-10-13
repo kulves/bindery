@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { EditorView } from "@/components/editor-view";
 import { MergeView } from "@/components/merge-view";
 import { SplitView } from "@/components/split-view";
+import { WordView } from "@/components/word-view";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ToolId } from "@/lib/pdf";
@@ -13,6 +14,7 @@ const TOOLS: Array<{ id: ToolId; label: string }> = [
   { id: "merge", label: "Merge" },
   { id: "split", label: "Split" },
   { id: "edit", label: "Edit" },
+  { id: "word", label: "Word" },
 ];
 
 export function BinderyApp() {
@@ -73,6 +75,7 @@ export function BinderyApp() {
           {tool === "merge" && <MergeView />}
           {tool === "split" && <SplitView />}
           {tool === "edit" && <EditorView />}
+          {tool === "word" && <WordView />}
 
           {docs.length > 0 && (
             <p className="mx-auto mt-8 max-w-6xl text-xs text-muted-foreground">
