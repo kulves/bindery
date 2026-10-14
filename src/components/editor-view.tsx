@@ -437,8 +437,8 @@ export function EditorView() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-4">
-      <header className="flex flex-col gap-3">
+    <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col">
+      <header className="flex shrink-0 flex-col gap-3 bg-background pb-3">
         <div className="flex flex-wrap items-center gap-1 rounded-lg bg-card p-2 shadow-[var(--shadow-border)]">
           <ToolButton
             label="Add or edit text"
@@ -918,6 +918,7 @@ export function EditorView() {
         </div>
       </header>
 
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-6">
       {docs.length > 1 && (
         <div className="flex gap-2 overflow-x-auto">
           {docs.map((item) => (
@@ -1083,6 +1084,7 @@ export function EditorView() {
         <p className="text-xs text-muted-foreground">
           Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · Hand drags the page · +/− zoom
         </p>
+      </div>
       </div>
     </div>
   );

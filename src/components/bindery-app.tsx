@@ -27,8 +27,8 @@ export function BinderyApp() {
 
   return (
     <TooltipProvider delayDuration={250}>
-      <div className="flex min-h-dvh flex-col overflow-x-hidden bg-background text-foreground">
-        <header className="sticky top-0 z-20 bg-primary text-primary-foreground">
+      <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+        <header className="z-20 shrink-0 bg-primary text-primary-foreground">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex items-center gap-3">
               <Mark />
@@ -71,13 +71,20 @@ export function BinderyApp() {
           </div>
         </header>
 
-        <main className="relative flex-1 px-4 py-6 sm:px-6 sm:py-10">
+        <main
+          className={cn(
+            "relative min-h-0 flex-1 px-4 sm:px-6",
+            tool === "edit" && docs.length > 0
+              ? "flex flex-col overflow-hidden pt-3"
+              : "overflow-y-auto py-6 sm:py-10",
+          )}
+        >
           {tool === "merge" && <MergeView />}
           {tool === "split" && <SplitView />}
           {tool === "edit" && <EditorView />}
           {tool === "word" && <WordView />}
 
-          {docs.length > 0 && (
+          {docs.length > 0 && tool !== "edit" && (
             <p className="mx-auto mt-8 max-w-6xl text-xs text-muted-foreground">
               {docs.length} document{docs.length === 1 ? "" : "s"} in the bench · processed in your
               browser
@@ -85,7 +92,7 @@ export function BinderyApp() {
           )}
 
           {busy && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/70">
+            <div className="fixed inset-0 z-30 flex items-center justify-center bg-background/70">
               <p className="flex items-center gap-2 rounded-md bg-card px-4 py-3 text-sm shadow-[var(--shadow-border)]">
                 <Loader2 className="size-4 animate-spin" />
                 {busyLabel || "Working…"}
