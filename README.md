@@ -1,6 +1,6 @@
-# Bindery
+# Papyrus
 
-A local PDF workshop: **merge**, **split**, and **edit pages** in the browser. Files never leave your machine.
+A local PDF workshop: **merge**, **split**, and **edit pages** in the browser. The editor is **Patina Lite**. Files never leave your machine.
 
 On the Edit tab you can add text boxes, rewrite existing lines, rotate, and reorder pages.
 
@@ -8,7 +8,7 @@ Free to download, share, and remix under the [MIT License](LICENSE).
 
 ## Download
 
-**[Download Bindery (zip)](https://github.com/kulves/bindery/releases/latest)** · or grab **Source code (zip)** from that page.
+**[Download Papyrus (zip)](https://github.com/kulves/bindery/releases/latest)** · or grab **Source code (zip)** from that page.
 
 You can also clone the repo:
 
@@ -24,7 +24,7 @@ You need [Node.js 22+](https://nodejs.org/) (the LTS installer is fine) and npm,
 
 **From the zip**
 
-1. Unzip `Bindery-v1.0.0.zip`
+1. Unzip `Papyrus-v1.0.0.zip`
 2. Open a terminal in the unzipped folder
 3. Run:
 

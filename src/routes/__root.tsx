@@ -3,7 +3,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Bindery";
+const APP_NAME = "Papyrus";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -13,7 +13,7 @@ export const Route = createRootRoute({
       { title: APP_NAME },
       {
         name: "description",
-        content: "Split, merge, and edit PDF pages in your browser. Files never leave this device.",
+        content: "Papyrus, with the Patina Lite PDF editor. Split, merge, and edit pages in your browser. Files never leave this device.",
       },
       { name: "theme-color", content: "#1c1916" },
     ],

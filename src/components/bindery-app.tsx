@@ -33,7 +33,10 @@ export function BinderyApp() {
             <div className="flex items-center gap-3">
               <Mark />
               <div>
-                <p className="font-display text-2xl leading-none tracking-tight">Bindery</p>
+                <div className="flex items-baseline gap-2">
+                  <p className="font-display text-2xl leading-none tracking-tight">Papyrus</p>
+                  <p className="text-[11px] tracking-wide text-primary-foreground/70">Patina Lite</p>
+                </div>
                 <p className="mt-1 text-xs text-ember">
                   Split, merge, and shape PDFs on this device
                 </p>

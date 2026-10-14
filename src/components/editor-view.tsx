@@ -756,7 +756,7 @@ export function EditorView() {
         {textMode && (
           <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
             <p className="text-sm text-muted-foreground sm:flex-1">
-              Click a line to rewrite it — Bindery covers the original. Empty space adds a new box. Drag the grip to move, a corner to resize.
+              Click a line to rewrite it — Papyrus covers the original. Empty space adds a new box. Drag the grip to move, a corner to resize.
             </p>
             <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               Size
@@ -1064,7 +1064,7 @@ export function EditorView() {
 
       <div className="flex flex-col gap-1">
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Page editor
+          Patina Lite
         </p>
         <h2 className="font-display text-2xl leading-tight">{doc.name}</h2>
         <p className="text-sm tabular-nums text-muted-foreground">

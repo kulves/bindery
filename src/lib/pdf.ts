@@ -311,7 +311,7 @@ async function drawSample(
       font: regular,
       color: ink,
     });
-    page.drawText("Sample for Bindery — not a live document", {
+    page.drawText("Sample for Papyrus — not a live document", {
       x: 330,
       y: 32,
       size: 9,

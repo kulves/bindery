@@ -304,7 +304,7 @@ export async function wordFileToPdf(file: File): Promise<Uint8Array> {
   try {
     zip = await JSZip.loadAsync(bytes);
   } catch {
-    throw new Error(`${file.name} isn’t a Word document Bindery can open.`);
+    throw new Error(`${file.name} isn’t a Word document Papyrus can open.`);
   }
   const documentXml = await zip.file("word/document.xml")?.async("string");
   if (!documentXml) {
