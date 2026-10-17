@@ -53,6 +53,22 @@ export interface SignatureStamp {
   ip: string;
 }
 
+export type ShapeKind = "rect" | "ellipse" | "line";
+
+export interface PageShape {
+  id: string;
+  page: number;
+  kind: ShapeKind;
+  nx: number;
+  ny: number;
+  nw: number;
+  nh: number;
+  reverse: boolean;
+  color: TextColor;
+  fill: TextFill;
+  weight: number;
+}
+
 export interface PagePicture {
   id: string;
   page: number;
@@ -381,6 +397,74 @@ export async function applyStrokes(bytes: Uint8Array, strokes: Stroke[]): Promis
           borderWidth: Math.max(1, stroke.width),
           borderOpacity: 1,
           borderLineCap: LineCapStyle.Round,
+        });
+      }
+      jsPage.cleanup();
+    }
+  } finally {
+    await js.destroy();
+  }
+
+  return pdf.save();
+}
+
+export async function applyShapes(bytes: Uint8Array, shapes: PageShape[]): Promise<Uint8Array> {
+  if (shapes.length === 0) return bytes;
+  const pdfjs = await loadPdfjs();
+  const data = new Uint8Array(bytes.byteLength);
+  data.set(bytes);
+  const js = await pdfjs.getDocument({ data, isEvalSupported: false, useSystemFonts: true }).promise;
+  const pdf = await PDFDocument.load(bytes);
+
+  try {
+    const byPage = new Map<number, PageShape[]>();
+    for (const shape of shapes) {
+      const list = byPage.get(shape.page) ?? [];
+      list.push(shape);
+      byPage.set(shape.page, list);
+    }
+
+    for (const [pageIndex, pageShapes] of byPage) {
+      const page = pdf.getPages()[pageIndex];
+      const jsPage = await js.getPage(pageIndex + 1);
+      if (!page || !jsPage) continue;
+      const viewport = jsPage.getViewport({ scale: 1 });
+
+      for (const shape of pageShapes) {
+        const stroke = TEXT_COLORS[shape.color].pdf;
+        const fill = TEXT_FILLS[shape.fill].pdf;
+        const weight = Math.max(0.75, shape.weight);
+        if (shape.kind === "line") {
+          const start = shape.reverse
+            ? visualPointToPdf(viewport, shape.nx, shape.ny + shape.nh)
+            : visualPointToPdf(viewport, shape.nx, shape.ny);
+          const end = shape.reverse
+            ? visualPointToPdf(viewport, shape.nx + shape.nw, shape.ny)
+            : visualPointToPdf(viewport, shape.nx + shape.nw, shape.ny + shape.nh);
+          page.drawLine({ start, end, thickness: weight, color: stroke });
+          continue;
+        }
+        const rect = visualToPdf(viewport, shape);
+        if (shape.kind === "ellipse") {
+          page.drawEllipse({
+            x: rect.x + rect.width / 2,
+            y: rect.y + rect.height / 2,
+            xScale: rect.width / 2,
+            yScale: rect.height / 2,
+            borderColor: stroke,
+            borderWidth: weight,
+            ...(fill ? { color: fill } : {}),
+          });
+          continue;
+        }
+        page.drawRectangle({
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+          borderColor: stroke,
+          borderWidth: weight,
+          ...(fill ? { color: fill } : {}),
         });
       }
       jsPage.cleanup();

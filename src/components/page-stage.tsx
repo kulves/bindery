@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { Check, GripHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/store/workspace";
-import { extractPageLines, signMetaLines, TEXT_COLORS, TEXT_FILLS, TEXT_FONTS, type HighlightMark, type PagePicture, type SignatureStamp, type Stroke, type TextBox, type TextColor, type TextFill, type TextFont, type TextLine } from "@/lib/pdf-text";
+import { extractPageLines, signMetaLines, TEXT_COLORS, TEXT_FILLS, TEXT_FONTS, type HighlightMark, type PagePicture, type PageShape, type ShapeKind, type SignatureStamp, type Stroke, type TextBox, type TextColor, type TextFill, type TextFont, type TextLine } from "@/lib/pdf-text";
 import { renderPageImage } from "@/lib/pdf-render";
 
 interface PageStageProps {
@@ -16,15 +16,18 @@ interface PageStageProps {
   handMode: boolean;
   signMode: boolean;
   imageMode: boolean;
+  shapeMode: boolean;
   boxes: TextBox[];
   marks: HighlightMark[];
   strokes: Stroke[];
   stamps: SignatureStamp[];
   pictures: PagePicture[];
+  shapes: PageShape[];
   selectedId: string | null;
   selectedMarkId: string | null;
   selectedStampId: string | null;
   selectedPictureId: string | null;
+  selectedShapeId: string | null;
   font: TextFont;
   size: number;
   bold: boolean;
@@ -32,6 +35,8 @@ interface PageStageProps {
   fill: TextFill;
   color: TextColor;
   penWidth: number;
+  shapeKind: ShapeKind;
+  shapeWeight: number;
   signature: { kind: "draw" | "type"; paths: Array<Array<{ nx: number; ny: number }>>; text: string; ip: string } | null;
   picture: { mime: PagePicture["mime"]; dataUrl: string; aspect: number } | null;
   onSelect: (id: string | null) => void;
@@ -51,15 +56,19 @@ interface PageStageProps {
   onAddPicture: (picture: PagePicture) => void;
   onPatchPicture: (id: string, patch: Partial<PagePicture>) => void;
   onRemovePicture: (id: string) => void;
+  onSelectShape: (id: string | null) => void;
+  onAddShape: (shape: PageShape) => void;
+  onPatchShape: (id: string, patch: Partial<PageShape>) => void;
+  onRemoveShape: (id: string) => void;
 }
 
 type Handle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
 type Drag =
-  | { kind: "move"; target: "box" | "stamp" | "picture"; id: string; ox: number; oy: number; nx: number; ny: number; dragging: boolean }
+  | { kind: "move"; target: "box" | "stamp" | "picture" | "shape"; id: string; ox: number; oy: number; nx: number; ny: number; dragging: boolean }
   | {
       kind: "resize";
-      target: "box" | "stamp" | "picture";
+      target: "box" | "stamp" | "picture" | "shape";
       id: string;
       handle: Handle;
       ox: number;
@@ -95,15 +104,18 @@ export function PageStage({
   handMode,
   signMode,
   imageMode,
+  shapeMode,
   boxes,
   marks,
   strokes,
   stamps,
   pictures,
+  shapes,
   selectedId,
   selectedMarkId,
   selectedStampId,
   selectedPictureId,
+  selectedShapeId,
   font,
   size,
   bold,
@@ -111,6 +123,8 @@ export function PageStage({
   fill,
   color,
   penWidth,
+  shapeKind,
+  shapeWeight,
   signature,
   picture,
   onSelect,
@@ -130,6 +144,10 @@ export function PageStage({
   onAddPicture,
   onPatchPicture,
   onRemovePicture,
+  onSelectShape,
+  onAddShape,
+  onPatchShape,
+  onRemoveShape,
 }: PageStageProps) {
   const beginGesture = useWorkspace((s) => s.beginGesture);
   const endGesture = useWorkspace((s) => s.endGesture);
@@ -138,7 +156,7 @@ export function PageStage({
   const [lines, setLines] = useState<TextLine[]>([]);
   const drag = useRef<Drag | null>(null);
   const sweep = useRef<{ nx: number; ny: number } | null>(null);
-  const [draft, setDraft] = useState<{ nx: number; ny: number; nw: number; nh: number } | null>(null);
+  const [draft, setDraft] = useState<{ nx: number; ny: number; nw: number; nh: number; reverse: boolean } | null>(null);
   const liveStroke = useRef<Array<{ nx: number; ny: number }>>([]);
   const [livePoints, setLivePoints] = useState<Array<{ nx: number; ny: number }>>([]);
 
@@ -176,6 +194,7 @@ export function PageStage({
   const pageStrokes = strokes.filter((stroke) => stroke.page === page);
   const pageStamps = stamps.filter((stamp) => stamp.page === page);
   const pagePictures = pictures.filter((item) => item.page === page);
+  const pageShapes = shapes.filter((item) => item.page === page);
   const covered = new Set(
     pageBoxes.map((box) => box.sourceId).filter((id): id is string => Boolean(id)),
   );
@@ -312,15 +331,16 @@ export function PageStage({
   }
 
   function onStagePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (handMode || !highlightMode) return;
+    if (handMode || (!highlightMode && !shapeMode)) return;
     if (event.target !== event.currentTarget) return;
     const point = pointFromEvent(event);
     if (!point) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     sweep.current = point;
-    setDraft({ nx: point.nx, ny: point.ny, nw: 0, nh: 0 });
-    onSelectMark(null);
+    setDraft({ nx: point.nx, ny: point.ny, nw: 0, nh: 0, reverse: false });
+    if (shapeMode) onSelectShape(null);
+    else onSelectMark(null);
   }
 
   function onStagePointerMove(event: ReactPointerEvent<HTMLDivElement>) {
@@ -335,6 +355,7 @@ export function PageStage({
       ny,
       nw: Math.abs(point.nx - origin.nx),
       nh: Math.abs(point.ny - origin.ny),
+      reverse: (point.nx - origin.nx) * (point.ny - origin.ny) < 0,
     });
   }
 
@@ -349,6 +370,24 @@ export function PageStage({
     const ny = Math.min(origin.ny, point.ny);
     const nw = Math.abs(point.nx - origin.nx);
     const nh = Math.abs(point.ny - origin.ny);
+    const reverse = (point.nx - origin.nx) * (point.ny - origin.ny) < 0;
+    if (nw < 0.02 && nh < 0.02) return;
+    if (shapeMode) {
+      onAddShape({
+        id: crypto.randomUUID(),
+        page,
+        kind: shapeKind,
+        nx,
+        ny,
+        nw: Math.max(nw, shapeKind === "line" ? 0.04 : 0.06),
+        nh: Math.max(nh, shapeKind === "line" ? 0.012 : 0.04),
+        reverse,
+        color,
+        fill,
+        weight: shapeWeight,
+      });
+      return;
+    }
     if (nw < 0.02 || nh < 0.01) return;
     onAddMark({ id: crypto.randomUUID(), page, nx, ny, nw, nh });
   }
@@ -521,6 +560,50 @@ export function PageStage({
     onSelectPicture(item.id);
   }
 
+  function onShapePointerDown(event: ReactPointerEvent<HTMLDivElement>, item: PageShape) {
+    if (handMode) return;
+    if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    beginGesture(docId);
+    drag.current = {
+      kind: "move",
+      target: "shape",
+      id: item.id,
+      ox: event.clientX,
+      oy: event.clientY,
+      nx: item.nx,
+      ny: item.ny,
+      dragging: false,
+    };
+    onSelectShape(item.id);
+  }
+
+  function onShapeHandlePointerDown(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    item: PageShape,
+    handle: Handle,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    beginGesture(docId);
+    drag.current = {
+      kind: "resize",
+      target: "shape",
+      id: item.id,
+      handle,
+      ox: event.clientX,
+      oy: event.clientY,
+      nx: item.nx,
+      ny: item.ny,
+      nw: item.nw,
+      nh: item.nh,
+    };
+    onSelectShape(item.id);
+  }
+
   function onDragMove(event: ReactPointerEvent) {
     const active = drag.current;
     const rect = stageRef.current?.getBoundingClientRect();
@@ -552,6 +635,18 @@ export function PageStage({
         });
         return;
       }
+      if (active.target === "shape") {
+        const item = pageShapes.find((shape) => shape.id === active.id);
+        if (!item) return;
+        const pixels = Math.hypot(event.clientX - active.ox, event.clientY - active.oy);
+        if (!active.dragging && pixels < 6) return;
+        active.dragging = true;
+        onPatchShape(active.id, {
+          nx: clamp(active.nx + dx, 0, 1 - item.nw),
+          ny: clamp(active.ny + dy, 0, 1 - item.nh),
+        });
+        return;
+      }
       const box = pageBoxes.find((item) => item.id === active.id);
       if (!box) return;
       const pixels = Math.hypot(event.clientX - active.ox, event.clientY - active.oy);
@@ -570,6 +665,10 @@ export function PageStage({
     }
     if (active.target === "picture") {
       onPatchPicture(active.id, { nx: next.nx, ny: next.ny, nw: next.nw, nh: next.nh });
+      return;
+    }
+    if (active.target === "shape") {
+      onPatchShape(active.id, { nx: next.nx, ny: next.ny, nw: next.nw, nh: next.nh });
       return;
     }
     onPatch(active.id, { nx: next.nx, ny: next.ny, nw: next.nw, nh: next.nh });
@@ -593,7 +692,7 @@ export function PageStage({
         "relative w-full rounded-md bg-sheet shadow-[var(--shadow-page)]",
         handMode
           ? "cursor-grab"
-          : highlightMode || signMode || drawMode || imageMode
+          : highlightMode || signMode || drawMode || imageMode || shapeMode
           ? "cursor-crosshair"
           : textMode
             ? "cursor-text"
@@ -635,17 +734,30 @@ export function PageStage({
           />
         );
       })}
-      {draft && draft.nw > 0 && draft.nh > 0 && (
-        <div
-          className="pointer-events-none absolute z-10 bg-mark/40 ring-1 ring-foreground/40"
-          style={{
-            left: `${draft.nx * 100}%`,
-            top: `${draft.ny * 100}%`,
-            width: `${draft.nw * 100}%`,
-            height: `${draft.nh * 100}%`,
-          }}
-        />
-      )}
+      {draft && draft.nw > 0 && draft.nh > 0 &&
+        (shapeMode ? (
+          <div
+            className="pointer-events-none absolute z-10"
+            style={{
+              left: `${draft.nx * 100}%`,
+              top: `${draft.ny * 100}%`,
+              width: `${draft.nw * 100}%`,
+              height: `${draft.nh * 100}%`,
+            }}
+          >
+            <ShapeGraphic kind={shapeKind} color={color} fill={fill} weight={shapeWeight} reverse={draft.reverse} />
+          </div>
+        ) : (
+          <div
+            className="pointer-events-none absolute z-10 bg-mark/40 ring-1 ring-foreground/40"
+            style={{
+              left: `${draft.nx * 100}%`,
+              top: `${draft.ny * 100}%`,
+              width: `${draft.nw * 100}%`,
+              height: `${draft.nh * 100}%`,
+            }}
+          />
+        ))}
 
       {(textMode || highlightMode) &&
         lines.map((line) => {
@@ -712,6 +824,104 @@ export function PageStage({
           />
         )}
       </svg>
+
+      {pageShapes.map((item) => {
+        const selected = item.id === selectedShapeId;
+        return (
+          <div
+            key={item.id}
+            onPointerDown={(event) => onShapePointerDown(event, item)}
+            onPointerMove={onDragMove}
+            onPointerUp={onDragUp}
+            onClick={(event) => event.stopPropagation()}
+            className={cn("absolute", selected ? "z-10" : "z-[1]")}
+            style={{
+              left: `${item.nx * 100}%`,
+              top: `${item.ny * 100}%`,
+              width: `${item.nw * 100}%`,
+              height: `${item.nh * 100}%`,
+            }}
+          >
+            <ShapeGraphic kind={item.kind} color={item.color} fill={item.fill} weight={item.weight} reverse={item.reverse} />
+            {selected && (
+              <div className="absolute -top-12 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1">
+                <button
+                  type="button"
+                  data-box-action
+                  aria-label="Delete shape"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onRemoveShape(item.id);
+                  }}
+                  className="inline-flex size-11 items-center justify-center rounded-sm bg-destructive text-destructive-foreground shadow-[var(--shadow-border)]"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  data-move
+                  aria-label="Move shape"
+                  title="Drag to move"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    beginGesture(docId);
+                    drag.current = {
+                      kind: "move",
+                      target: "shape",
+                      id: item.id,
+                      ox: event.clientX,
+                      oy: event.clientY,
+                      nx: item.nx,
+                      ny: item.ny,
+                      dragging: true,
+                    };
+                    onSelectShape(item.id);
+                  }}
+                  onPointerMove={onDragMove}
+                  onPointerUp={onDragUp}
+                  className="inline-flex size-11 cursor-grab items-center justify-center rounded-sm bg-primary text-primary-foreground shadow-[var(--shadow-border)] touch-none active:cursor-grabbing"
+                >
+                  <GripHorizontal className="size-4" />
+                </button>
+                <button
+                  type="button"
+                  data-box-action
+                  aria-label="Done with shape"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSelectShape(null);
+                  }}
+                  className="inline-flex size-11 items-center justify-center rounded-sm bg-ok text-ok-foreground shadow-[var(--shadow-border)]"
+                >
+                  <Check className="size-4" />
+                </button>
+              </div>
+            )}
+            {selected &&
+              HANDLES.map((handle) => (
+                <button
+                  key={handle.id}
+                  type="button"
+                  data-handle={handle.id}
+                  aria-label={handle.label}
+                  onPointerDown={(event) => onShapeHandlePointerDown(event, item, handle.id)}
+                  onPointerMove={onDragMove}
+                  onPointerUp={onDragUp}
+                  className={cn(
+                    "absolute z-20 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center touch-none",
+                    handle.className,
+                  )}
+                >
+                  <span className="block size-3 rounded-xs bg-primary shadow-[var(--shadow-border)] ring-2 ring-card" />
+                </button>
+              ))}
+          </div>
+        );
+      })}
 
       {pagePictures.map((item) => {
         const selected = item.id === selectedPictureId;
@@ -1046,6 +1256,52 @@ export function PageStage({
         );
       })}
     </div>
+  );
+}
+
+function ShapeGraphic({
+  kind,
+  color,
+  fill,
+  weight,
+  reverse,
+}: {
+  kind: ShapeKind;
+  color: TextColor;
+  fill: TextFill;
+  weight: number;
+  reverse: boolean;
+}) {
+  const stroke = TEXT_COLORS[color].css;
+  const paint = fill === "none" ? "none" : TEXT_FILLS[fill].css;
+  const sw = Math.max(1.5, weight);
+  if (kind === "line") {
+    return (
+      <svg className="pointer-events-none size-full overflow-visible" aria-hidden="true">
+        <line
+          x1="0"
+          y1={reverse ? "100%" : "0"}
+          x2="100%"
+          y2={reverse ? "0" : "100%"}
+          stroke={stroke}
+          strokeWidth={sw}
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+    );
+  }
+  if (kind === "ellipse") {
+    return (
+      <svg className="pointer-events-none size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <ellipse cx="50" cy="50" rx="49" ry="49" fill={paint} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+      </svg>
+    );
+  }
+  return (
+    <svg className="pointer-events-none size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <rect x="1" y="1" width="98" height="98" fill={paint} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+    </svg>
   );
 }
 

@@ -3,13 +3,17 @@ import {
   Bold,
   ChevronDown,
   ChevronUp,
+  Circle,
   FilePlus,
   Hand,
   Highlighter,
   ImageIcon,
   Italic,
+  Minus,
   PenTool,
   RotateCw,
+  Shapes,
+  Square,
   Stamp,
   Trash2,
   Type,
@@ -32,7 +36,7 @@ import {
   rotatePage,
   safeFilename,
 } from "@/lib/pdf";
-import { applyHighlights, applyPictures, applySignatures, applyStrokes, applyTextBoxes, fetchPublicIp, formatSignTime, readPageImage, TEXT_COLORS, TEXT_FILLS, TEXT_FONTS, type TextBox, type TextColor, type TextFill, type TextFont } from "@/lib/pdf-text";
+import { applyHighlights, applyPictures, applyShapes, applySignatures, applyStrokes, applyTextBoxes, fetchPublicIp, formatSignTime, readPageImage, TEXT_COLORS, TEXT_FILLS, TEXT_FONTS, type ShapeKind, type TextBox, type TextColor, type TextFill, type TextFont } from "@/lib/pdf-text";
 import { cn } from "@/lib/utils";
 import { useActiveDoc, useWorkspace } from "@/store/workspace";
 
@@ -45,6 +49,18 @@ function stepZoom(value: number, dir: -1 | 1) {
   if (Math.abs(clamped - 1) < 0.05) return 1;
   return Math.round(clamped * 100) / 100;
 }
+
+const SHAPE_KINDS: Array<{ id: ShapeKind; label: string }> = [
+  { id: "rect", label: "Rectangle" },
+  { id: "ellipse", label: "Ellipse" },
+  { id: "line", label: "Line" },
+];
+
+const SHAPE_WEIGHTS = [
+  { id: "fine", label: "Fine", width: 1.5 },
+  { id: "medium", label: "Medium", width: 2.5 },
+  { id: "heavy", label: "Heavy", width: 4 },
+] as const;
 
 const PEN = [
   { id: "fine", label: "Fine", width: 1.8 },
@@ -62,6 +78,7 @@ export function EditorView() {
   const strokes = useWorkspace((s) => s.strokes);
   const stamps = useWorkspace((s) => s.stamps);
   const pictures = useWorkspace((s) => s.pictures);
+  const shapes = useWorkspace((s) => s.shapes);
   const setActive = useWorkspace((s) => s.setActive);
   const setOutputName = useWorkspace((s) => s.setOutputName);
   const setBusy = useWorkspace((s) => s.setBusy);
@@ -85,6 +102,10 @@ export function EditorView() {
   const patchPicture = useWorkspace((s) => s.patchPicture);
   const removePicture = useWorkspace((s) => s.removePicture);
   const clearPictures = useWorkspace((s) => s.clearPictures);
+  const addShape = useWorkspace((s) => s.addShape);
+  const patchShape = useWorkspace((s) => s.patchShape);
+  const removeShape = useWorkspace((s) => s.removeShape);
+  const clearShapes = useWorkspace((s) => s.clearShapes);
   const undo = useWorkspace((s) => s.undo);
   const redo = useWorkspace((s) => s.redo);
   const beginGesture = useWorkspace((s) => s.beginGesture);
@@ -94,6 +115,9 @@ export function EditorView() {
   const [drawMode, setDrawMode] = useState(false);
   const [signMode, setSignMode] = useState(false);
   const [imageMode, setImageMode] = useState(false);
+  const [shapeMode, setShapeMode] = useState(false);
+  const [shapeKind, setShapeKind] = useState<ShapeKind>("rect");
+  const [shapeWeight, setShapeWeight] = useState(2.5);
   const [handMode, setHandMode] = useState(false);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -110,6 +134,7 @@ export function EditorView() {
   const [signName, setSignName] = useState("");
   const [selectedStampId, setSelectedStampId] = useState<string | null>(null);
   const [selectedPictureId, setSelectedPictureId] = useState<string | null>(null);
+  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [pendingPicture, setPendingPicture] = useState<{
     mime: "image/png" | "image/jpeg";
     dataUrl: string;
@@ -151,6 +176,7 @@ export function EditorView() {
       setSelectedMarkId(null);
       setSelectedStampId(null);
       setSelectedPictureId(null);
+      setSelectedShapeId(null);
     }
 
     function nudge(dx: number, dy: number) {
@@ -175,6 +201,13 @@ export function EditorView() {
         if (!item) return;
         beginGesture(docId);
         patchHighlight(docId, item.id, { nx: clampPos(item.nx + dx, item.nw), ny: clampPos(item.ny + dy, item.nh) });
+        return;
+      }
+      if (selectedShapeId) {
+        const item = (state.shapes[docId] ?? []).find((shape) => shape.id === selectedShapeId);
+        if (!item) return;
+        beginGesture(docId);
+        patchShape(docId, item.id, { nx: clampPos(item.nx + dx, item.nw), ny: clampPos(item.ny + dy, item.nh) });
         return;
       }
       if (selectedId) {
@@ -206,10 +239,13 @@ export function EditorView() {
         setSelectedMarkId(null);
         setSelectedStampId(null);
         setSelectedPictureId(null);
+        setSelectedShapeId(null);
         return;
       }
 
-      const selectedSomething = Boolean(selectedId || selectedPictureId || selectedStampId || selectedMarkId);
+      const selectedSomething = Boolean(
+        selectedId || selectedPictureId || selectedStampId || selectedMarkId || selectedShapeId,
+      );
       if (!selectedSomething && (key === "PageUp" || key === "ArrowUp" || key === "ArrowLeft")) {
         event.preventDefault();
         stepPage(-1);
@@ -238,6 +274,9 @@ export function EditorView() {
         } else if (selectedMarkId) {
           removeHighlight(docId, selectedMarkId);
           setSelectedMarkId(null);
+        } else if (selectedShapeId) {
+          removeShape(docId, selectedShapeId);
+          setSelectedShapeId(null);
         } else if (selectedId) {
           removeTextBox(docId, selectedId);
           setSelectedId(null);
@@ -282,14 +321,17 @@ export function EditorView() {
     selectedPictureId,
     selectedStampId,
     selectedMarkId,
+    selectedShapeId,
     patchPicture,
     patchStamp,
     patchHighlight,
     patchTextBox,
+    patchShape,
     removePicture,
     removeStamp,
     removeHighlight,
     removeTextBox,
+    removeShape,
   ]);
 
   if (docs.length === 0) {
@@ -298,7 +340,7 @@ export function EditorView() {
         <DropZone
           multiple={false}
           title="Drop a PDF to edit"
-          hint="Add text, highlight, draw, sign, place images, rotate, and reorder pages. Files never leave this device."
+          hint="Add text, highlight, draw shapes, sign, place images, rotate, and reorder pages. Files never leave this device."
         />
         <div className="flex flex-wrap justify-center gap-2">
           <Button variant="outline" onClick={() => void addBlank()}>
@@ -319,6 +361,8 @@ export function EditorView() {
   const ink = strokes[doc.id] ?? [];
   const signs = stamps[doc.id] ?? [];
   const pics = pictures[doc.id] ?? [];
+  const drawn = shapes[doc.id] ?? [];
+  const selectedShape = drawn.find((shape) => shape.id === selectedShapeId) ?? null;
   const selected = boxes.find((box) => box.id === selectedId) ?? null;
   const selectedMark = marks.find((mark) => mark.id === selectedMarkId) ?? null;
   const selectedStamp = signs.find((stamp) => stamp.id === selectedStampId) ?? null;
@@ -335,13 +379,16 @@ export function EditorView() {
     const currentInk = state.strokes[doc.id] ?? [];
     const currentStamps = state.stamps[doc.id] ?? [];
     const currentPics = state.pictures[doc.id] ?? [];
+    const currentShapes = state.shapes[doc.id] ?? [];
     let next = bytes;
     if (currentMarks.length) next = await applyHighlights(next, currentMarks);
+    if (currentShapes.length) next = await applyShapes(next, currentShapes);
     if (currentPics.length) next = await applyPictures(next, currentPics);
     if (currentInk.length) next = await applyStrokes(next, currentInk);
     if (currentStamps.length) next = await applySignatures(next, currentStamps);
     if (currentBoxes.length) next = await applyTextBoxes(next, currentBoxes);
     if (currentMarks.length) clearHighlights(doc.id);
+    if (currentShapes.length) clearShapes(doc.id);
     if (currentPics.length) clearPictures(doc.id);
     if (currentInk.length) clearStrokes(doc.id);
     if (currentStamps.length) clearStamps(doc.id);
@@ -350,6 +397,7 @@ export function EditorView() {
     setSelectedMarkId(null);
     setSelectedStampId(null);
     setSelectedPictureId(null);
+    setSelectedShapeId(null);
     return next;
   }
 
@@ -447,6 +495,7 @@ export function EditorView() {
               setTextMode((on) => !on);
               setHighlightMode(false);
               setDrawMode(false);
+              setShapeMode(false);
               setSignMode(false);
               setImageMode(false);
               setHandMode(false);
@@ -454,6 +503,7 @@ export function EditorView() {
               setSelectedMarkId(null);
               setSelectedStampId(null);
               setSelectedPictureId(null);
+              setSelectedShapeId(null);
             }}
           >
             <Type />
@@ -466,6 +516,7 @@ export function EditorView() {
               setHighlightMode((on) => !on);
               setTextMode(false);
               setDrawMode(false);
+              setShapeMode(false);
               setSignMode(false);
               setImageMode(false);
               setHandMode(false);
@@ -473,6 +524,7 @@ export function EditorView() {
               setSelectedMarkId(null);
               setSelectedStampId(null);
               setSelectedPictureId(null);
+              setSelectedShapeId(null);
             }}
           >
             <Highlighter />
@@ -487,15 +539,38 @@ export function EditorView() {
               setHighlightMode(false);
               setSignMode(false);
               setImageMode(false);
+              setShapeMode(false);
               setHandMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
               setSelectedPictureId(null);
+              setSelectedShapeId(null);
             }}
           >
             <PenTool />
             Draw
+          </ToolButton>
+          <ToolButton
+            label="Draw a shape"
+            pressed={shapeMode}
+            onClick={() => {
+              setShapeMode((on) => !on);
+              setTextMode(false);
+              setHighlightMode(false);
+              setDrawMode(false);
+              setSignMode(false);
+              setImageMode(false);
+              setHandMode(false);
+              setSelectedId(null);
+              setSelectedMarkId(null);
+              setSelectedStampId(null);
+              setSelectedPictureId(null);
+              setSelectedShapeId(null);
+            }}
+          >
+            <Shapes />
+            Shapes
           </ToolButton>
           <ToolButton
             label="Add a signature"
@@ -505,12 +580,14 @@ export function EditorView() {
               setTextMode(false);
               setHighlightMode(false);
               setDrawMode(false);
+              setShapeMode(false);
               setImageMode(false);
               setHandMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
               setSelectedPictureId(null);
+              setSelectedShapeId(null);
             }}
           >
             <Stamp />
@@ -524,12 +601,14 @@ export function EditorView() {
               setTextMode(false);
               setHighlightMode(false);
               setDrawMode(false);
+              setShapeMode(false);
               setSignMode(false);
               setHandMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
               setSelectedPictureId(null);
+              setSelectedShapeId(null);
             }}
           >
             <ImageIcon />
@@ -543,12 +622,14 @@ export function EditorView() {
               setTextMode(false);
               setHighlightMode(false);
               setDrawMode(false);
+              setShapeMode(false);
               setSignMode(false);
               setImageMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
               setSelectedPictureId(null);
+              setSelectedShapeId(null);
             }}
           >
             <Hand />
@@ -659,6 +740,110 @@ export function EditorView() {
               <Undo2 />
               Undo
             </Button>
+          </div>
+        )}
+        {shapeMode && (
+          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3">
+            <p className="text-sm text-muted-foreground">
+              Drag on the page. Rectangle, ellipse, or line. Drag the grip to move, a corner to resize.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-full bg-card p-1">
+                {SHAPE_KINDS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-pressed={(selectedShape?.kind ?? shapeKind) === item.id}
+                    onClick={() => {
+                      setShapeKind(item.id);
+                      if (selectedShape) patchShape(doc.id, selectedShape.id, { kind: item.id });
+                    }}
+                    className={cn(
+                      "inline-flex h-11 items-center gap-1 rounded-full px-3 text-sm",
+                      (selectedShape?.kind ?? shapeKind) === item.id
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-muted",
+                    )}
+                  >
+                    {item.id === "rect" ? <Square className="size-4" /> : item.id === "ellipse" ? <Circle className="size-4" /> : <Minus className="size-4" />}
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1 rounded-full bg-card p-1">
+                {(Object.keys(TEXT_COLORS) as TextColor[]).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    aria-label={TEXT_COLORS[item].label}
+                    aria-pressed={(selectedShape?.color ?? color) === item}
+                    title={TEXT_COLORS[item].label}
+                    onClick={() => {
+                      setColor(item);
+                      if (selectedShape) patchShape(doc.id, selectedShape.id, { color: item });
+                    }}
+                    className={cn(
+                      "flex size-11 items-center justify-center rounded-full",
+                      (selectedShape?.color ?? color) === item ? "ring-2 ring-foreground" : "hover:bg-muted",
+                    )}
+                  >
+                    <span className="block size-6 rounded-full ring-1 ring-border" style={{ backgroundColor: TEXT_COLORS[item].css }} />
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1 rounded-full bg-card p-1">
+                {(Object.keys(TEXT_FILLS) as TextFill[]).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    aria-label={TEXT_FILLS[item].label}
+                    aria-pressed={(selectedShape?.fill ?? fill) === item}
+                    title={TEXT_FILLS[item].label}
+                    onClick={() => {
+                      setFill(item);
+                      if (selectedShape) patchShape(doc.id, selectedShape.id, { fill: item });
+                    }}
+                    className={cn(
+                      "flex size-11 items-center justify-center rounded-full",
+                      (selectedShape?.fill ?? fill) === item ? "ring-2 ring-foreground" : "hover:bg-muted",
+                    )}
+                  >
+                    <span
+                      className="block size-6 rounded-xs ring-1 ring-border"
+                      style={{
+                        backgroundColor: item === "none" ? "transparent" : TEXT_FILLS[item].css,
+                        backgroundImage:
+                          item === "none"
+                            ? "linear-gradient(45deg, #d9d1c3 25%, transparent 25%, transparent 75%, #d9d1c3 75%), linear-gradient(45deg, #d9d1c3 25%, #faf7f0 25%, #faf7f0 75%, #d9d1c3 75%)"
+                            : undefined,
+                        backgroundSize: item === "none" ? "8px 8px" : undefined,
+                        backgroundPosition: item === "none" ? "0 0, 4px 4px" : undefined,
+                      }}
+                    />
+                  </button>
+                ))}
+              </div>
+              <div className="flex rounded-full bg-card p-1">
+                {SHAPE_WEIGHTS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setShapeWeight(item.width);
+                      if (selectedShape) patchShape(doc.id, selectedShape.id, { weight: item.width });
+                    }}
+                    className={cn(
+                      "h-11 rounded-full px-3 text-sm",
+                      (selectedShape?.weight ?? shapeWeight) === item.width
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-muted",
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
         {signMode && (
@@ -1057,6 +1242,21 @@ export function EditorView() {
               removePicture(doc.id, id);
               if (selectedPictureId === id) setSelectedPictureId(null);
             }}
+            shapeMode={shapeMode}
+            shapes={drawn}
+            selectedShapeId={selectedShapeId}
+            shapeKind={selectedShape?.kind ?? shapeKind}
+            shapeWeight={selectedShape?.weight ?? shapeWeight}
+            onSelectShape={setSelectedShapeId}
+            onAddShape={(shape) => {
+              addShape(doc.id, shape);
+              setSelectedShapeId(shape.id);
+            }}
+            onPatchShape={(id, patch) => patchShape(doc.id, id, patch)}
+            onRemoveShape={(id) => {
+              removeShape(doc.id, id);
+              if (selectedShapeId === id) setSelectedShapeId(null);
+            }}
           />
           </div>
         </figure>
@@ -1080,6 +1280,7 @@ export function EditorView() {
             ? ` · ${signs.length} signature${signs.length === 1 ? "" : "s"}`
             : ""}
           {pics.length > 0 ? ` · ${pics.length} image${pics.length === 1 ? "" : "s"}` : ""}
+          {drawn.length > 0 ? ` · ${drawn.length} shape${drawn.length === 1 ? "" : "s"}` : ""}
         </p>
         <p className="text-xs text-muted-foreground">
           Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · Hand drags the page · +/− zoom
