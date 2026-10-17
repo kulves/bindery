@@ -1,0 +1,51 @@
+{
+  "name": "papyrus",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Papyrus, the Patina Lite PDF editor. Files stay on this computer.",
+  "author": "Kulves",
+  "main": "electron.cjs",
+  "build": {
+    "appId": "com.kulves.papyrus",
+    "productName": "Papyrus",
+    "executableName": "Papyrus",
+    "electronVersion": "33.4.11",
+    "directories": {
+      "output": "../release"
+    },
+    "files": [
+      "electron.cjs",
+      "dist/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "artifactName": "Papyrus-${os}-${arch}.${ext}",
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "tar.gz",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Office"
+    }
+  }
+}

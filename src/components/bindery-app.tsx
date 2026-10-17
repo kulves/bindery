@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { Toaster } from "sonner";
 import { EditorView } from "@/components/editor-view";
 import { MergeView } from "@/components/merge-view";
@@ -17,6 +17,8 @@ const TOOLS: Array<{ id: ToolId; label: string }> = [
   { id: "word", label: "Word" },
 ];
 
+const DOWNLOAD_URL = "https://github.com/kulves/bindery/releases/latest";
+
 export function BinderyApp() {
   const tool = useWorkspace((s) => s.tool);
   const setTool = useWorkspace((s) => s.setTool);
@@ -24,6 +26,7 @@ export function BinderyApp() {
   const busyLabel = useWorkspace((s) => s.busyLabel);
   const docs = useWorkspace((s) => s.docs);
   const reset = useWorkspace((s) => s.reset);
+  const inDesktopApp = typeof navigator !== "undefined" && /Electron/i.test(navigator.userAgent);
 
   return (
     <TooltipProvider delayDuration={250}>
@@ -51,6 +54,17 @@ export function BinderyApp() {
                 >
                   Clear bench
                 </Button>
+              )}
+              {!inDesktopApp && (
+                <a
+                  href={DOWNLOAD_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-11 items-center gap-2 rounded-full px-3 text-sm font-medium text-primary-foreground hover:bg-primary-foreground/10"
+                >
+                  <Download className="size-4" />
+                  Download
+                </a>
               )}
               <nav aria-label="Tools" className="flex rounded-full bg-primary-foreground/10 p-1">
                 {TOOLS.map((item) => (

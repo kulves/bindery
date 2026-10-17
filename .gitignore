@@ -4,6 +4,8 @@ dist/
 .output/
 screenshots/
 artifacts/
+desktop/dist/
+release/
 *.log
 .DS_Store
 .project_id

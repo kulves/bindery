@@ -8,70 +8,64 @@ Free to download, share, and remix under the [MIT License](LICENSE).
 
 ## Download
 
-**[Download Papyrus (zip)](https://github.com/kulves/bindery/releases/latest)** · or grab **Source code (zip)** from that page.
+Papyrus is a free program. No account, and your PDFs stay on the computer.
 
-You can also clone the repo:
+**[Download Papyrus](https://github.com/kulves/bindery/releases/latest)**
+
+| Computer | File | How to open it |
+|---|---|---|
+| Windows | `Papyrus-win-x64.zip` | Unzip, then double-click `Papyrus.exe` |
+| Mac (Apple silicon) | `Papyrus-mac-arm64.zip` | Unzip, then open `Papyrus.app` |
+| Mac (Intel) | `Papyrus-mac-x64.zip` | Unzip, then open `Papyrus.app` |
+| Linux | `Papyrus-linux-x64.tar.gz` | Unpack, then run `Papyrus` |
+
+The first time Windows warns about an unknown app, choose **More info**, then **Run anyway**. On a Mac, right-click Papyrus and choose **Open**.
+
+You can still use Papyrus in a browser, or clone this repo to change it:
 
 ```bash
 git clone https://github.com/kulves/bindery.git
 ```
 
-Share that GitHub link with friends — the project is public.
+## Run the source on your PC
 
-## Run it on your PC
-
-You need [Node.js 22+](https://nodejs.org/) (the LTS installer is fine) and npm, which comes with it.
-
-**From the zip**
-
-1. Unzip `Papyrus-v1.0.0.zip`
-2. Open a terminal in the unzipped folder
-3. Run:
+You need [Node.js 22+](https://nodejs.org/).
 
 ```bash
 npm install
 npm run dev
 ```
 
-4. Open [http://localhost:8080](http://localhost:8080)
-
-**From git**
-
-```bash
-cd bindery
-npm install
-npm run dev
-```
+Then open http://localhost:8080
 
 | Script | What it does |
 |---|---|
-| `npm run dev` | Dev server (edit, save, refresh) |
-| `npm run build` | Production build |
+| `npm run dev` | Dev server |
+| `npm run build` | Production web build |
+| `npm run build:desktop` | Windowed app files |
+| `npm run pack:desktop` | Windows, Mac, and Linux downloads |
 | `npm run typecheck` | TypeScript check |
 
 ## Open in your IDE
 
-Open the `bindery` folder in VS Code, Cursor, WebStorm, or whatever you use. After `npm install`, TypeScript and Tailwind should resolve normally.
+Open the `bindery` folder in VS Code, Cursor, or WebStorm. After `npm install`, TypeScript and Tailwind should resolve.
 
-This is also the starting point for a fuller PDF editor (text, highlight, draw, images, signatures). Those tools are stubbed in the Edit tab today.
-
-### Where to extend the full editor
+### Where to extend the editor
 
 | What you want | Start here |
 |---|---|
-| Page tools UI (rotate, delete, coming-soon tools) | `src/components/editor-view.tsx` |
-| PDF operations (merge, split, rotate, extract) | `src/lib/pdf.ts` |
+| Page tools | `src/components/editor-view.tsx` |
+| PDF operations | `src/lib/pdf.ts` |
 | Page thumbnails | `src/lib/pdf-render.ts` |
 | Documents on the bench | `src/store/workspace.ts` |
-| Merge / split screens | `src/components/merge-view.tsx`, `src/components/split-view.tsx` |
-| App chrome (Merge / Split / Edit) | `src/components/bindery-app.tsx` |
+| Merge / split / Word screens | `src/components/merge-view.tsx`, `src/components/split-view.tsx`, `src/components/word-view.tsx` |
+| App chrome | `src/components/bindery-app.tsx` |
+| Desktop window | `desktop/electron.cjs` |
 
-The Edit tab already rotates, reorders, and deletes pages. The **Soon** buttons (Text, Highlight, Draw, Image, Sign) are the placeholders to implement next.
-
-Stack: React 19, TanStack Start, Tailwind v4, [pdf-lib](https://pdf-lib.js.org/) (write), [PDF.js](https://mozilla.github.io/pdf.js/) (preview).
+Stack: React 19, TanStack Start, Tailwind v4, [pdf-lib](https://pdf-lib.js.org/), [PDF.js](https://mozilla.github.io/pdf.js/). The downloadable program is an Electron window around the same editor.
 
 ## Notes
 
-- Auth and a database are **off**. Everything lives in memory in the tab.
+- Auth and a database are **off**. Documents stay in memory until you save a PDF.
 - Encrypted PDFs cannot be opened.
-- `npm run dev` listens on port **8080**. Change `server.port` in `vite.config.ts` if that port is taken.
+- `npm run dev` listens on port **8080**.
