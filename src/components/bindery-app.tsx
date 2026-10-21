@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { ToolId } from "@/lib/pdf";
 import { cn } from "@/lib/utils";
+import { UpdateNotice } from "@/components/update-notice";
 import { useWorkspace } from "@/store/workspace";
 
 const TOOLS: Array<{ id: ToolId; label: string }> = [
@@ -117,6 +118,7 @@ export function BinderyApp() {
             </div>
           )}
         </main>
+        <UpdateNotice />
       </div>
       <Toaster
         position="bottom-center"

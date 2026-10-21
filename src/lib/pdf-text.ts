@@ -384,20 +384,7 @@ export async function applyStrokes(bytes: Uint8Array, strokes: Stroke[]): Promis
 
       for (const stroke of pageStrokes) {
         const pts = stroke.points.map((point) => visualPointToPdf(viewport, point.nx, point.ny));
-        if (pts.length === 1 && pts[0]) {
-          pts.push({ x: pts[0].x + 0.4, y: pts[0].y });
-        }
-        const start = pts[0];
-        if (!start) continue;
-        const path = pts
-          .map((pt, index) => `${index === 0 ? "M" : "L"} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`)
-          .join(" ");
-        page.drawSvgPath(path, {
-          borderColor: INK,
-          borderWidth: Math.max(1, stroke.width),
-          borderOpacity: 1,
-          borderLineCap: LineCapStyle.Round,
-        });
+        drawInk(page, pts, Math.max(1, stroke.width));
       }
       jsPage.cleanup();
     }
@@ -523,20 +510,10 @@ export async function applySignatures(bytes: Uint8Array, stamps: SignatureStamp[
           const weight = Math.max(1.2, Math.min(4, inkH * 0.08));
           const scale = 1 - SIGN_META;
           for (const path of stamp.paths) {
-            if (path.length === 0) continue;
             const pts = path.map((point) =>
               visualPointToPdf(viewport, stamp.nx + point.nx * stamp.nw, stamp.ny + point.ny * stamp.nh * scale),
             );
-            if (pts.length === 1 && pts[0]) pts.push({ x: pts[0].x + 0.4, y: pts[0].y });
-            const d = pts
-              .map((pt, index) => `${index === 0 ? "M" : "L"} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`)
-              .join(" ");
-            page.drawSvgPath(d, {
-              borderColor: INK,
-              borderWidth: weight,
-              borderOpacity: 1,
-              borderLineCap: LineCapStyle.Round,
-            });
+            drawInk(page, pts, weight);
           }
         }
         const metaSize = Math.max(6, Math.min(8, rect.width * 0.04));
@@ -601,6 +578,40 @@ export async function applyPictures(bytes: Uint8Array, pictures: PagePicture[]):
   }
 
   return pdf.save();
+}
+
+function drawInk(
+  page: {
+    drawSvgPath: (
+      path: string,
+      options: {
+        x: number;
+        y: number;
+        borderColor: ReturnType<typeof rgb>;
+        borderWidth: number;
+        borderOpacity: number;
+        borderLineCap: LineCapStyle;
+      },
+    ) => void;
+  },
+  points: Array<{ x: number; y: number }>,
+  width: number,
+) {
+  const start = points[0];
+  if (!start) return;
+  const pts = points.length === 1 ? [start, { x: start.x + 0.4, y: start.y }] : points;
+  // pdf-lib flips the SVG Y axis. Negate PDF Y so the stroke lands on the page.
+  const d = pts
+    .map((pt, index) => `${index === 0 ? "M" : "L"} ${pt.x.toFixed(2)} ${(-pt.y).toFixed(2)}`)
+    .join(" ");
+  page.drawSvgPath(d, {
+    x: 0,
+    y: 0,
+    borderColor: INK,
+    borderWidth: width,
+    borderOpacity: 1,
+    borderLineCap: LineCapStyle.Round,
+  });
 }
 
 function visualPointToPdf(
