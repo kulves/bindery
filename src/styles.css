@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* The desktop build's Vite root is desktop/, so Tailwind would otherwise miss these files. */
+@source "../src";
+@source "../desktop";
+
 @theme {
   --color-background: #f3efe6;
   --color-foreground: #1c1916;
