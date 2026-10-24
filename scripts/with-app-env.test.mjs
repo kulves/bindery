@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
 import {
@@ -20,7 +20,7 @@ const PRINT_FLAG = "process.stdout.write(String(process.env.VITE_AUTH_ENABLED));
 function makeWorkspace(appEnvJson) {
   const root = mkdtempSync(join(tmpdir(), "app-env-"));
   if (appEnvJson !== undefined) {
-    mkdirSync(join(root, ".grok"), { recursive: true });
+    mkdirSync(join(root, dirname(APP_ENV_REL_PATH)), { recursive: true });
     writeFileSync(join(root, APP_ENV_REL_PATH), appEnvJson);
   }
   return root;
