@@ -486,7 +486,7 @@ export function EditorView() {
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col">
-      <header className="flex shrink-0 flex-col gap-3 bg-background pb-3">
+      <header className="flex shrink-0 flex-col gap-2 bg-background pb-2">
         <div className="flex flex-wrap items-center gap-1 rounded-lg bg-card p-2 shadow-[var(--shadow-border)]">
           <ToolButton
             label="Add or edit text"
@@ -1088,22 +1088,24 @@ export function EditorView() {
             )}
           </div>
         )}
-        <div className="flex flex-col gap-3 rounded-xl bg-card p-3 shadow-[var(--shadow-border)] sm:flex-row sm:items-end">
-          <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-medium text-muted-foreground">
-            File name
+        <div className="flex items-center gap-2 rounded-lg bg-card px-2 py-1 shadow-[var(--shadow-border)]">
+          <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span className="shrink-0">File name</span>
             <Input
               value={outputName}
               placeholder={`${doc.name}-edited`}
+              aria-label="File name"
               onChange={(event) => setOutputName(event.target.value)}
+              className="h-8"
             />
           </label>
-          <Button size="lg" className="w-full sm:w-auto" disabled={busy} onClick={() => void onSave()}>
+          <Button className="h-8 shrink-0 px-3" disabled={busy} onClick={() => void onSave()}>
             Save PDF
           </Button>
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-6">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       {docs.length > 1 && (
         <div className="flex gap-2 overflow-x-auto">
           {docs.map((item) => (
@@ -1126,8 +1128,8 @@ export function EditorView() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[112px_minmax(0,1fr)]">
-        <ol className="flex gap-2 overflow-x-auto pr-1 lg:max-h-[70vh] lg:flex-col lg:overflow-y-auto">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-3 lg:grid-cols-[112px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <ol className="flex gap-2 overflow-x-auto pr-1 lg:max-h-full lg:flex-col lg:overflow-y-auto">
           {Array.from({ length: doc.pageCount }, (_, index) => (
             <li key={index} className="w-16 shrink-0 lg:w-auto">
               <button
@@ -1160,7 +1162,7 @@ export function EditorView() {
 
         <figure
           className={cn(
-            "relative h-[82vh] w-full min-w-0 overflow-hidden rounded-xl bg-desk shadow-[var(--shadow-border)] [container-type:size]",
+            "relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-desk shadow-[var(--shadow-border)] [container-type:size]",
             handMode && "cursor-grab active:cursor-grabbing",
           )}
           onPointerDown={onPanDown}
