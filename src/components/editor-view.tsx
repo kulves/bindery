@@ -1088,18 +1088,18 @@ export function EditorView() {
             )}
           </div>
         )}
-        <div className="flex items-center gap-2 rounded-lg bg-card px-2 py-1 shadow-[var(--shadow-border)]">
-          <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-muted-foreground">
+        <div className="flex h-7 items-center justify-end gap-2">
+          <label className="flex w-52 min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <span className="shrink-0">File name</span>
             <Input
               value={outputName}
               placeholder={`${doc.name}-edited`}
               aria-label="File name"
               onChange={(event) => setOutputName(event.target.value)}
-              className="h-8"
+              className="h-7 px-2 text-xs"
             />
           </label>
-          <Button className="h-8 shrink-0 px-3" disabled={busy} onClick={() => void onSave()}>
+          <Button className="h-7 shrink-0 px-3 text-xs" disabled={busy} onClick={() => void onSave()}>
             Save PDF
           </Button>
         </div>
