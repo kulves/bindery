@@ -247,6 +247,7 @@ async function openWindow() {
     minWidth: 880,
     minHeight: 640,
     title: "Papyrus",
+    icon: path.join(__dirname, "icon.png"),
     backgroundColor: "#f3efe6",
     autoHideMenuBar: true,
     webPreferences: {

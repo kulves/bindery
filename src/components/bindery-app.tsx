@@ -137,12 +137,5 @@ export function BinderyApp() {
 }
 
 function Mark() {
-  return (
-    <svg viewBox="0 0 32 32" className="size-10 shrink-0" aria-hidden="true">
-      <rect width="32" height="32" rx="8" className="fill-card" />
-      <rect x="12" y="5" width="14" height="18" rx="2" className="fill-accent" />
-      <rect x="5" y="9" width="14" height="18" rx="2" className="fill-foreground" />
-      <rect x="7" y="13" width="3" height="10" rx="1" className="fill-card" />
-    </svg>
-  );
+  return <img src="/papyrus-logo.png" alt="" className="size-10 shrink-0 rounded-lg" />;
 }
