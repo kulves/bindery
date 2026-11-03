@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type UIEvent as ReactUIEvent } from "react";
 import {
   Bold,
   ChevronDown,
@@ -119,7 +119,6 @@ export function EditorView() {
   const [shapeKind, setShapeKind] = useState<ShapeKind>("rect");
   const [shapeWeight, setShapeWeight] = useState(2.5);
   const [handMode, setHandMode] = useState(false);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null);
   const [font, setFont] = useState<TextFont>("sans");
@@ -141,7 +140,9 @@ export function EditorView() {
     aspect: number;
   } | null>(null);
   const imageInput = useRef<HTMLInputElement>(null);
-  const panDrag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
+  const stageRef = useRef<HTMLElement>(null);
+  const panDrag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const scrollFocus = useRef({ fx: 0.5, fy: 0.5 });
   const [signerIp, setSignerIp] = useState("");
   const [ipStatus, setIpStatus] = useState<"idle" | "loading" | "ready" | "missing">("idle");
 
@@ -334,6 +335,17 @@ export function EditorView() {
     removeShape,
   ]);
 
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const { fx, fy } = scrollFocus.current;
+    const frame = requestAnimationFrame(() => {
+      el.scrollLeft = fx * el.scrollWidth - el.clientWidth / 2;
+      el.scrollTop = fy * el.scrollHeight - el.clientHeight / 2;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [zoom]);
+
   if (docs.length === 0) {
     return (
       <div className="stagger-in mx-auto flex w-full max-w-3xl flex-col gap-4">
@@ -471,17 +483,32 @@ export function EditorView() {
     if (target.closest("button, textarea, input, a")) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    panDrag.current = { x: event.clientX, y: event.clientY, px: pan.x, py: pan.y };
+    panDrag.current = {
+      x: event.clientX,
+      y: event.clientY,
+      left: event.currentTarget.scrollLeft,
+      top: event.currentTarget.scrollTop,
+    };
   }
 
   function onPanMove(event: ReactPointerEvent<HTMLElement>) {
     const drag = panDrag.current;
     if (!drag) return;
-    setPan({ x: drag.px + event.clientX - drag.x, y: drag.py + event.clientY - drag.y });
+    event.currentTarget.scrollLeft = drag.left - (event.clientX - drag.x);
+    event.currentTarget.scrollTop = drag.top - (event.clientY - drag.y);
   }
 
   function onPanUp() {
     panDrag.current = null;
+  }
+
+  function onStageScroll(event: ReactUIEvent<HTMLElement>) {
+    const el = event.currentTarget;
+    if (el.scrollWidth === 0 || el.scrollHeight === 0) return;
+    scrollFocus.current = {
+      fx: (el.scrollLeft + el.clientWidth / 2) / el.scrollWidth,
+      fy: (el.scrollTop + el.clientHeight / 2) / el.scrollHeight,
+    };
   }
 
   return (
@@ -1161,22 +1188,25 @@ export function EditorView() {
         </ol>
 
         <figure
+          ref={stageRef}
           className={cn(
-            "relative h-full min-h-0 w-full overflow-hidden rounded-xl bg-desk shadow-[var(--shadow-border)] [container-type:size]",
+            "relative h-full min-h-0 w-full overflow-auto rounded-xl bg-desk shadow-[var(--shadow-border)] [container-type:size]",
             handMode && "cursor-grab active:cursor-grabbing",
           )}
           onPointerDown={onPanDown}
           onPointerMove={onPanMove}
           onPointerUp={onPanUp}
           onPointerCancel={onPanUp}
+          onScroll={onStageScroll}
         >
           <div
-            className="absolute top-1/2 left-1/2"
+            className="grid min-h-full min-w-full place-items-center"
             style={{
-              width: "min(96cqw, calc(92cqh * 8.5 / 11))",
-              transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom})`,
+              width: `max(100%, calc(min(96cqw, calc(92cqh * 8.5 / 11)) * ${zoom} + 1.5rem))`,
+              height: `max(100%, calc(min(96cqw, calc(92cqh * 8.5 / 11)) * ${zoom} * 11 / 8.5 + 1.5rem))`,
             }}
           >
+          <div style={{ width: `calc(min(96cqw, calc(92cqh * 8.5 / 11)) * ${zoom})` }}>
           <PageStage
             docId={doc.id}
             bytes={doc.bytes}
@@ -1261,6 +1291,7 @@ export function EditorView() {
             }}
           />
           </div>
+          </div>
         </figure>
       </div>
 
@@ -1285,7 +1316,7 @@ export function EditorView() {
           {drawn.length > 0 ? ` · ${drawn.length} shape${drawn.length === 1 ? "" : "s"}` : ""}
         </p>
         <p className="text-xs text-muted-foreground">
-          Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · Hand drags the page · +/− zoom
+          Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · Scroll when zoomed · Hand drags the page · +/− zoom
         </p>
       </div>
       </div>
