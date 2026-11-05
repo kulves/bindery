@@ -43,7 +43,13 @@ export function UpdateNotice() {
         const response = await fetch("/__papyrus/update", { method: "POST" });
         const data = (await response.json()) as { ok?: boolean; error?: string };
         if (!data.ok) throw new Error(data.error || "Could not install the update.");
-        toast.success("Papyrus will restart with the update.");
+        try {
+          localStorage.setItem(DISMISS_KEY, offer.version);
+        } catch {
+          /* ignore */
+        }
+        setOffer(null);
+        toast.success("Download finished. Papyrus will close and open again.");
         return;
       }
       if (import.meta.env.DEV && offer.version === "preview") {

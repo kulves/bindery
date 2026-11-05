@@ -160,13 +160,25 @@ function writeHelper() {
 
 function launchHelper(helper, env) {
   if (process.platform === "win32") {
-    // `start` breaks the helper out of Papyrus. Otherwise Windows closes it
-    // when Papyrus quits, and the new files are never copied.
-    const child = spawn(
-      "cmd.exe",
-      ["/d", "/c", "start", "/min", "cmd.exe", "/d", "/c", helper.script],
-      { detached: true, stdio: "ignore", windowsHide: true, env },
+    // WScript starts the installer outside Papyrus. A normal helper is closed
+    // when Papyrus quits, so the new files never land and the notice returns.
+    const vbs = helper.script.replace(/\.cmd$/i, ".vbs");
+    const quoted = helper.script.replace(/"/g, '""');
+    fs.writeFileSync(
+      vbs,
+      [
+        'Set sh = CreateObject("Wscript.Shell")',
+        `sh.Run "cmd.exe /d /c ""${quoted}""", 0, False`,
+        "",
+      ].join("\r\n"),
     );
+    const wscript = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "wscript.exe");
+    const child = spawn(wscript, ["//B", "//Nologo", vbs], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+      env,
+    });
     child.unref();
     return child.pid;
   }
