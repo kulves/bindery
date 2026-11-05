@@ -111,19 +111,29 @@ function unpack(archive, dest) {
 function writeHelper() {
   const base = path.join(os.tmpdir(), `papyrus-update-${Date.now()}`);
   if (process.platform === "win32") {
-    const script = `${base}.ps1`;
+    const script = `${base}.cmd`;
+    // robocopy merges into the existing folder. Copy-Item nests folders and
+    // gives up when Papyrus.exe is still locked, which left the old app in place.
     fs.writeFileSync(
       script,
       [
-        "$pidToWait = [int]$env:PAPYRUS_PID",
-        "while (Get-Process -Id $pidToWait -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 300 }",
-        "Start-Sleep -Seconds 1",
-        "Copy-Item -Path (Join-Path $env:PAPYRUS_SRC '*') -Destination $env:PAPYRUS_DEST -Recurse -Force",
-        "Start-Process -FilePath $env:PAPYRUS_EXE",
+        "@echo off",
+        "set /a n=0",
+        ":wait",
+        'tasklist /FI "PID eq %PAPYRUS_PID%" 2>nul | find "%PAPYRUS_PID%" >nul',
+        "if errorlevel 1 goto copy",
+        "set /a n+=1",
+        "if %n% GEQ 60 goto copy",
+        "ping -n 2 127.0.0.1 >nul",
+        "goto wait",
+        ":copy",
+        "ping -n 3 127.0.0.1 >nul",
+        'robocopy "%PAPYRUS_SRC%" "%PAPYRUS_DEST%" /E /R:15 /W:1 /NFL /NDL /NJH /NJS /nc /ns /np >nul',
+        'start "" "%PAPYRUS_EXE%"',
         "",
       ].join("\r\n"),
     );
-    return { command: "powershell.exe", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script] };
+    return { command: "cmd.exe", args: ["/d", "/c", script], script };
   }
   const script = `${base}.sh`;
   fs.writeFileSync(
@@ -134,7 +144,7 @@ function writeHelper() {
       "sleep 1",
       'if [ "$PAPYRUS_PLATFORM" = "darwin" ]; then',
       '  rm -rf "$PAPYRUS_DEST"',
-      '  cp -R "$PAPYRUS_SRC" "$PAPYRUS_DEST"',
+      '  ditto "$PAPYRUS_SRC" "$PAPYRUS_DEST"',
       '  open "$PAPYRUS_DEST"',
       "else",
       '  cp -a "$PAPYRUS_SRC"/. "$PAPYRUS_DEST"/',
@@ -145,7 +155,24 @@ function writeHelper() {
     ].join("\n"),
     { mode: 0o755 },
   );
-  return { command: script, args: [] };
+  return { command: script, args: [], script };
+}
+
+function launchHelper(helper, env) {
+  if (process.platform === "win32") {
+    // `start` breaks the helper out of Papyrus. Otherwise Windows closes it
+    // when Papyrus quits, and the new files are never copied.
+    const child = spawn(
+      "cmd.exe",
+      ["/d", "/c", "start", "/min", "cmd.exe", "/d", "/c", helper.script],
+      { detached: true, stdio: "ignore", windowsHide: true, env },
+    );
+    child.unref();
+    return child.pid;
+  }
+  const child = spawn(helper.command, helper.args, { detached: true, stdio: "ignore", env });
+  child.unref();
+  return child.pid;
 }
 
 async function applyUpdate() {
@@ -165,19 +192,15 @@ async function applyUpdate() {
   unpack(archive, unpacked);
   const source = extractedPayload(unpacked);
   const helper = writeHelper();
-  const child = spawn(helper.command, helper.args, {
-    detached: true,
-    stdio: "ignore",
-    env: {
-      ...process.env,
-      PAPYRUS_PID: String(process.pid),
-      PAPYRUS_SRC: source,
-      PAPYRUS_DEST: installFolder(),
-      PAPYRUS_EXE: process.execPath,
-      PAPYRUS_PLATFORM: process.platform,
-    },
+  const pid = launchHelper(helper, {
+    ...process.env,
+    PAPYRUS_PID: String(process.pid),
+    PAPYRUS_SRC: source,
+    PAPYRUS_DEST: installFolder(),
+    PAPYRUS_EXE: process.execPath,
+    PAPYRUS_PLATFORM: process.platform,
   });
-  child.unref();
+  if (!pid) return { ok: false, error: "Could not start the installer." };
   return { ok: true };
 }
 
