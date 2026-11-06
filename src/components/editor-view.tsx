@@ -142,7 +142,7 @@ export function EditorView() {
   const imageInput = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLElement>(null);
   const panDrag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const scrollFocus = useRef({ fx: 0.5, fy: 0.5 });
+  const scrollFocus = useRef({ fx: 0.5, fy: 0.5, ax: 0.5, ay: 0.5 });
   const [signerIp, setSignerIp] = useState("");
   const [ipStatus, setIpStatus] = useState<"idle" | "loading" | "ready" | "missing">("idle");
 
@@ -338,13 +338,37 @@ export function EditorView() {
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
-    const { fx, fy } = scrollFocus.current;
+    const { fx, fy, ax, ay } = scrollFocus.current;
     const frame = requestAnimationFrame(() => {
-      el.scrollLeft = fx * el.scrollWidth - el.clientWidth / 2;
-      el.scrollTop = fy * el.scrollHeight - el.clientHeight / 2;
+      el.scrollLeft = fx * el.scrollWidth - el.clientWidth * ax;
+      el.scrollTop = fy * el.scrollHeight - el.clientHeight * ay;
     });
     return () => cancelAnimationFrame(frame);
   }, [zoom]);
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    function onWheel(event: WheelEvent) {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const relX = event.clientX - rect.left;
+      const relY = event.clientY - rect.top;
+      if (el.scrollWidth > 0 && el.scrollHeight > 0 && el.clientWidth > 0 && el.clientHeight > 0) {
+        scrollFocus.current = {
+          fx: (el.scrollLeft + relX) / el.scrollWidth,
+          fy: (el.scrollTop + relY) / el.scrollHeight,
+          ax: relX / el.clientWidth,
+          ay: relY / el.clientHeight,
+        };
+      }
+      const dir = event.deltaY < 0 ? 1 : -1;
+      setZoom((value) => stepZoom(value, dir));
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [doc?.id]);
 
   if (docs.length === 0) {
     return (
@@ -508,6 +532,8 @@ export function EditorView() {
     scrollFocus.current = {
       fx: (el.scrollLeft + el.clientWidth / 2) / el.scrollWidth,
       fy: (el.scrollTop + el.clientHeight / 2) / el.scrollHeight,
+      ax: 0.5,
+      ay: 0.5,
     };
   }
 
@@ -1316,7 +1342,7 @@ export function EditorView() {
           {drawn.length > 0 ? ` · ${drawn.length} shape${drawn.length === 1 ? "" : "s"}` : ""}
         </p>
         <p className="text-xs text-muted-foreground">
-          Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · Scroll when zoomed · Hand drags the page · +/− zoom
+          Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · Scroll when zoomed · Ctrl + mouse wheel zooms · Hand drags the page
         </p>
       </div>
       </div>
