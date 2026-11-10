@@ -15,7 +15,7 @@ export const Route = createRootRoute({
         name: "description",
         content: "Papyrus, with the Patina Lite PDF editor. Split, merge, and edit pages in your browser. Files never leave this device.",
       },
-      { name: "theme-color", content: "#1c1916" },
+      { name: "theme-color", content: "#243746" },
     ],
     links: [
       { rel: "icon", type: "image/png", href: "/papyrus-logo.png" },

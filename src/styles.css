@@ -7,15 +7,15 @@
 
 @theme {
   --color-background: #f3efe6;
-  --color-foreground: #1c1916;
+  --color-foreground: #243746;
   --color-card: #faf7f0;
-  --color-card-foreground: #1c1916;
+  --color-card-foreground: #243746;
   --color-popover: #faf7f0;
-  --color-popover-foreground: #1c1916;
-  --color-primary: #1c1916;
+  --color-popover-foreground: #243746;
+  --color-primary: #243746;
   --color-primary-foreground: #f6f3ec;
   --color-secondary: #e8e2d6;
-  --color-secondary-foreground: #1c1916;
+  --color-secondary-foreground: #243746;
   --color-muted: #e7e1d6;
   --color-muted-foreground: #6e675c;
   --color-accent: #3d4f5c;
@@ -24,10 +24,10 @@
   --color-destructive-foreground: #faf7f0;
   --color-border: #d9d1c3;
   --color-input: #d9d1c3;
-  --color-ring: #1c1916;
+  --color-ring: #243746;
   --color-desk: #ece6da;
   --color-sheet: #ffffff;
-  --color-ink-soft: #2c2925;
+  --color-ink-soft: #355068;
   --color-mark: #e8c547;
   --color-ember: #e8893a;
   --color-ok: #2d6a4f;
