@@ -2,8 +2,8 @@ import { PDFDocument, StandardFonts, rgb, BlendMode, LineCapStyle, type PDFFont 
 import { loadPdfjs } from "@/lib/pdf-render";
 
 export type TextFont = "sans" | "serif" | "mono";
-export type TextFill = "none" | "gray" | "blue" | "yellow";
-export type TextColor = "ink" | "gray" | "navy" | "red" | "green";
+export type TextFill = "none" | "white" | "gray" | "blue" | "yellow" | "green" | "pink" | "navy";
+export type TextColor = "ink" | "white" | "gray" | "navy" | "red" | "green";
 
 export interface TextBox {
   id: string;
@@ -98,9 +98,13 @@ const SIGN_META = 0.32;
 
 export const TEXT_FILLS: Record<TextFill, { label: string; css: string; pdf: ReturnType<typeof rgb> | null }> = {
   none: { label: "Transparent", css: "transparent", pdf: null },
+  white: { label: "White", css: "#ffffff", pdf: rgb(1, 1, 1) },
   gray: { label: "Light gray", css: "#e4e0d6", pdf: rgb(0.894, 0.878, 0.839) },
   blue: { label: "Light blue", css: "#d5e6f2", pdf: rgb(0.835, 0.902, 0.949) },
   yellow: { label: "Light yellow", css: "#f4ebb2", pdf: rgb(0.957, 0.922, 0.698) },
+  green: { label: "Light green", css: "#d7eedd", pdf: rgb(0.843, 0.933, 0.867) },
+  pink: { label: "Light pink", css: "#f6d6df", pdf: rgb(0.965, 0.839, 0.875) },
+  navy: { label: "Navy", css: "#1a2e3e", pdf: rgb(0.102, 0.18, 0.243) },
 };
 
 export const TEXT_FONTS: Record<TextFont, { label: string; className: string }> = {
@@ -111,8 +115,9 @@ export const TEXT_FONTS: Record<TextFont, { label: string; className: string }> 
 
 export const TEXT_COLORS: Record<TextColor, { label: string; css: string; pdf: ReturnType<typeof rgb> }> = {
   ink: { label: "Ink", css: "#1c1916", pdf: rgb(0.11, 0.1, 0.09) },
+  white: { label: "White", css: "#ffffff", pdf: rgb(1, 1, 1) },
   gray: { label: "Gray", css: "#6e675c", pdf: rgb(0.431, 0.404, 0.361) },
-  navy: { label: "Navy", css: "#3d4f5c", pdf: rgb(0.239, 0.31, 0.361) },
+  navy: { label: "Navy", css: "#1a2e3e", pdf: rgb(0.102, 0.18, 0.243) },
   red: { label: "Red", css: "#8f3d32", pdf: rgb(0.561, 0.239, 0.196) },
   green: { label: "Green", css: "#2d6a4f", pdf: rgb(0.176, 0.416, 0.31) },
 };
@@ -277,7 +282,7 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
         const width = Math.max(8, Math.max(...xs) - x);
         const height = Math.max(box.size, Math.max(...ys) - y);
         const font = pickFace(faces, box.font, Boolean(box.bold), Boolean(box.italic));
-        const size = Math.max(6, Math.min(72, box.size));
+        const size = Math.max(1, Math.min(72, box.size));
         const lines = wrapText(winAnsi(box.text), font, size, width - 2);
         const fill = TEXT_FILLS[box.fill ?? "none"]?.pdf ?? null;
         if (box.replace || fill) {

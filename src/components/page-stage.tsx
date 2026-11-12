@@ -14,6 +14,7 @@ interface PageStageProps {
   highlightMode: boolean;
   drawMode: boolean;
   handMode: boolean;
+  selectMode: boolean;
   signMode: boolean;
   imageMode: boolean;
   shapeMode: boolean;
@@ -102,6 +103,7 @@ export function PageStage({
   highlightMode,
   drawMode,
   handMode,
+  selectMode,
   signMode,
   imageMode,
   shapeMode,
@@ -386,7 +388,7 @@ export function PageStage({
   }
 
   function onBoxPointerDown(event: ReactPointerEvent<HTMLDivElement>, box: TextBox) {
-    if (handMode || !textMode) return;
+    if (handMode || !(textMode || selectMode)) return;
     if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
     if ((event.target as HTMLElement).tagName === "TEXTAREA") return;
     event.preventDefault();
@@ -438,7 +440,7 @@ export function PageStage({
   }
 
   function onStampPointerDown(event: ReactPointerEvent<HTMLDivElement>, stamp: SignatureStamp) {
-    if (handMode || !signMode) return;
+    if (handMode || !(signMode || selectMode)) return;
     if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
     event.preventDefault();
     event.stopPropagation();
@@ -657,6 +659,8 @@ export function PageStage({
         "relative w-full rounded-md bg-sheet shadow-[var(--shadow-page)]",
         handMode
           ? "cursor-grab"
+          : selectMode
+            ? "cursor-default"
           : highlightMode || signMode || drawMode || imageMode || shapeMode
           ? "cursor-crosshair"
           : textMode
@@ -1136,14 +1140,15 @@ export function PageStage({
                 }
               }}
               className={cn(
-                "size-full resize-none px-1 py-0.5 leading-tight outline-none placeholder:text-muted-foreground",
+                "size-full resize-none px-1 py-0.5 outline-none placeholder:text-muted-foreground",
                 TEXT_FONTS[box.font ?? "sans"].className,
                 box.bold && "font-bold",
                 box.italic && "italic",
-                box.size >= 28 ? "text-3xl" : box.size >= 20 ? "text-xl" : box.size >= 14 ? "text-base" : "text-sm",
                 !selected && "pointer-events-none",
               )}
               style={{
+                fontSize: `${Math.max(1, box.size)}px`,
+                lineHeight: 1.15,
                 backgroundColor:
                   box.replace && (box.fill ?? "none") === "none"
                     ? "var(--color-sheet)"

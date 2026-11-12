@@ -10,6 +10,7 @@ import {
   ImageIcon,
   Italic,
   Minus,
+  MousePointer2,
   PenTool,
   RotateCw,
   Shapes,
@@ -119,6 +120,7 @@ export function EditorView() {
   const [shapeKind, setShapeKind] = useState<ShapeKind>("rect");
   const [shapeWeight, setShapeWeight] = useState(2.5);
   const [handMode, setHandMode] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedMarkId, setSelectedMarkId] = useState<string | null>(null);
   const [font, setFont] = useState<TextFont>("sans");
@@ -552,6 +554,7 @@ export function EditorView() {
               setSignMode(false);
               setImageMode(false);
               setHandMode(false);
+              setSelectMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -573,6 +576,7 @@ export function EditorView() {
               setSignMode(false);
               setImageMode(false);
               setHandMode(false);
+              setSelectMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -594,6 +598,7 @@ export function EditorView() {
               setImageMode(false);
               setShapeMode(false);
               setHandMode(false);
+              setSelectMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -615,6 +620,7 @@ export function EditorView() {
               setSignMode(false);
               setImageMode(false);
               setHandMode(false);
+              setSelectMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -636,6 +642,7 @@ export function EditorView() {
               setShapeMode(false);
               setImageMode(false);
               setHandMode(false);
+              setSelectMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -657,6 +664,7 @@ export function EditorView() {
               setShapeMode(false);
               setSignMode(false);
               setHandMode(false);
+              setSelectMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -666,6 +674,23 @@ export function EditorView() {
           >
             <ImageIcon />
             Image
+          </ToolButton>
+          <ToolButton
+            label="Select a box"
+            pressed={selectMode}
+            onClick={() => {
+              setSelectMode((on) => !on);
+              setTextMode(false);
+              setHighlightMode(false);
+              setDrawMode(false);
+              setShapeMode(false);
+              setSignMode(false);
+              setImageMode(false);
+              setHandMode(false);
+            }}
+          >
+            <MousePointer2 />
+            Select
           </ToolButton>
           <ToolButton
             label="Drag the page"
@@ -678,6 +703,7 @@ export function EditorView() {
               setShapeMode(false);
               setSignMode(false);
               setImageMode(false);
+              setSelectMode(false);
               setSelectedId(null);
               setSelectedMarkId(null);
               setSelectedStampId(null);
@@ -991,22 +1017,31 @@ export function EditorView() {
             )}
           </div>
         )}
-        {textMode && (
+        {selectMode && !selected && (
+          <p className="rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground">
+            Click a text box, highlight, image, shape, or signature to select it.
+          </p>
+        )}
+        {(textMode || selected) && (
           <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
             <p className="text-sm text-muted-foreground sm:flex-1">
-              Click empty space to add a box. The original words stay as they are. Drag the grip to move, a corner to resize.
+              {selectMode
+                ? "Select is on. Click a text box, highlight, image, shape, or signature."
+                : "Click empty space to add a box. The original words stay as they are. Drag the grip to move, a corner to resize."}
             </p>
             <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               Size
               <Input
                 type="number"
-                min={8}
+                min={1}
                 max={72}
+                step={0.5}
                 value={selected?.size ?? size}
                 aria-label="Font size"
                 className="w-20"
                 onChange={(event) => {
-                  const next = Math.max(8, Math.min(72, Number(event.target.value) || 14));
+                  const raw = Number(event.target.value);
+                  const next = Math.max(1, Math.min(72, Number.isFinite(raw) ? Math.round(raw * 2) / 2 : 14));
                   setSize(next);
                   if (selected) patchTextBox(doc.id, selected.id, { size: next });
                 }}
@@ -1242,6 +1277,7 @@ export function EditorView() {
             highlightMode={highlightMode}
             drawMode={drawMode}
             handMode={handMode}
+            selectMode={selectMode}
             boxes={boxes}
             marks={marks}
             strokes={ink}
@@ -1342,7 +1378,7 @@ export function EditorView() {
           {drawn.length > 0 ? ` · ${drawn.length} shape${drawn.length === 1 ? "" : "s"}` : ""}
         </p>
         <p className="text-xs text-muted-foreground">
-          Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · Scroll when zoomed · Ctrl + mouse wheel zooms · Hand drags the page
+          Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · Scroll when zoomed · Ctrl + mouse wheel zooms · Select grabs a box · Hand drags the page
         </p>
       </div>
       </div>
