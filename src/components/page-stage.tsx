@@ -176,7 +176,7 @@ export function PageStage({
   }, [bytes, page, fallback]);
 
   useEffect(() => {
-    if (!textMode && !highlightMode) {
+    if (!highlightMode) {
       setLines([]);
       return;
     }
@@ -187,7 +187,7 @@ export function PageStage({
     return () => {
       alive = false;
     };
-  }, [bytes, page, textMode, highlightMode]);
+  }, [bytes, page, highlightMode]);
 
   const pageBoxes = boxes.filter((box) => box.page === page);
   const pageMarks = marks.filter((mark) => mark.page === page);
@@ -195,9 +195,6 @@ export function PageStage({
   const pageStamps = stamps.filter((stamp) => stamp.page === page);
   const pagePictures = pictures.filter((item) => item.page === page);
   const pageShapes = shapes.filter((item) => item.page === page);
-  const covered = new Set(
-    pageBoxes.map((box) => box.sourceId).filter((id): id is string => Boolean(id)),
-  );
 
   function pointFromEvent(event: { clientX: number; clientY: number }) {
     const rect = stageRef.current?.getBoundingClientRect();
@@ -276,38 +273,6 @@ export function PageStage({
       mime: picture.mime,
       dataUrl: picture.dataUrl,
     });
-  }
-
-  function editLine(line: TextLine) {
-    const existing = pageBoxes.find(
-      (box) => box.replace && Math.abs(box.nx - line.nx) < 0.01 && Math.abs(box.ny - line.ny) < 0.01,
-    );
-    if (existing) {
-      onSelect(existing.id);
-      return;
-    }
-    const ny = Math.max(0, line.ny - line.nh * 0.35);
-    const nh = Math.min(1 - ny, Math.max(line.nh * 1.85, MIN_H));
-    const nx = Math.max(0, line.nx - 0.012);
-    const nw = Math.min(1 - nx, Math.max(line.nw + 0.028, MIN_W));
-    const box: TextBox = {
-      id: crypto.randomUUID(),
-      page,
-      nx,
-      ny,
-      nw,
-      nh,
-      text: line.str,
-      size: Math.round(line.size) || size,
-      font: "serif",
-      bold: false,
-      italic: false,
-      fill,
-      color,
-      replace: true,
-      sourceId: line.id,
-    };
-    onAdd(box);
   }
 
   function highlightLine(line: TextLine) {
@@ -759,18 +724,15 @@ export function PageStage({
           />
         ))}
 
-      {(textMode || highlightMode) &&
-        lines.map((line) => {
-          if (textMode && covered.has(line.id)) return null;
-          return (
+      {highlightMode &&
+        lines.map((line) => (
             <button
               key={line.id}
               type="button"
-              title={highlightMode ? "Highlight this line" : "Edit this text"}
+              title="Highlight this line"
               onClick={(event) => {
                 event.stopPropagation();
-                if (highlightMode) highlightLine(line);
-                else editLine(line);
+                highlightLine(line);
               }}
               className="absolute rounded-xs border border-transparent bg-accent/0 hover:border-accent hover:bg-accent/15"
               style={{
@@ -781,12 +743,9 @@ export function PageStage({
                 minHeight: "1.1rem",
               }}
             >
-              <span className="sr-only">
-                {highlightMode ? "Highlight" : "Edit"} “{line.str}”
-              </span>
+              <span className="sr-only">Highlight “{line.str}”</span>
             </button>
-          );
-        })}
+          ))}
 
       <svg
         className={cn(

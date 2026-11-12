@@ -542,7 +542,7 @@ export function EditorView() {
       <header className="flex shrink-0 flex-col gap-2 bg-background pb-2">
         <div className="flex flex-wrap items-center gap-1 rounded-lg bg-card p-2 shadow-[var(--shadow-border)]">
           <ToolButton
-            label="Add or edit text"
+            label="Add text"
             pressed={textMode}
             onClick={() => {
               setTextMode((on) => !on);
@@ -994,7 +994,7 @@ export function EditorView() {
         {textMode && (
           <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
             <p className="text-sm text-muted-foreground sm:flex-1">
-              Click a line to rewrite it — Papyrus covers the original. Empty space adds a new box. Drag the grip to move, a corner to resize.
+              Click empty space to add a box. The original words stay as they are. Drag the grip to move, a corner to resize.
             </p>
             <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               Size

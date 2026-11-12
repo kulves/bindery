@@ -2,7 +2,7 @@
 
 A local PDF workshop: **merge**, **split**, and **edit pages** in the browser. The editor is **Patina Lite**. Files never leave your machine.
 
-On the Edit tab you can add text boxes, rewrite existing lines, rotate, and reorder pages.
+On the Edit tab you can add text boxes, highlight, sign, rotate, and reorder pages. Papyrus does not change the original words in an uploaded PDF.
 
 Free to download, share, and remix under the [MIT License](LICENSE).
 
