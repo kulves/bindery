@@ -53,6 +53,7 @@ function stepZoom(value: number, dir: -1 | 1) {
 
 const SHAPE_KINDS: Array<{ id: ShapeKind; label: string }> = [
   { id: "rect", label: "Rectangle" },
+  { id: "round", label: "Rounded" },
   { id: "ellipse", label: "Ellipse" },
   { id: "line", label: "Line" },
 ];
@@ -824,7 +825,7 @@ export function EditorView() {
         {shapeMode && (
           <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3">
             <p className="text-sm text-muted-foreground">
-              Drag on the page. Rectangle, ellipse, or line. Drag the grip to move, a corner to resize.
+              Drag on the page. Rectangle, rounded rectangle, ellipse, or line. Drag the grip to move, a corner to resize.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex rounded-full bg-card p-1">
@@ -844,7 +845,17 @@ export function EditorView() {
                         : "text-foreground hover:bg-muted",
                     )}
                   >
-                    {item.id === "rect" ? <Square className="size-4" /> : item.id === "ellipse" ? <Circle className="size-4" /> : <Minus className="size-4" />}
+                    {item.id === "rect" ? (
+                      <Square className="size-4" />
+                    ) : item.id === "round" ? (
+                      <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="5" />
+                      </svg>
+                    ) : item.id === "ellipse" ? (
+                      <Circle className="size-4" />
+                    ) : (
+                      <Minus className="size-4" />
+                    )}
                     {item.label}
                   </button>
                 ))}

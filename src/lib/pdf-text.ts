@@ -53,7 +53,7 @@ export interface SignatureStamp {
   ip: string;
 }
 
-export type ShapeKind = "rect" | "ellipse" | "line";
+export type ShapeKind = "rect" | "round" | "ellipse" | "line";
 
 export interface PageShape {
   id: string;
@@ -449,6 +449,16 @@ export async function applyShapes(bytes: Uint8Array, shapes: PageShape[]): Promi
           });
           continue;
         }
+        if (shape.kind === "round") {
+          page.drawSvgPath(roundedRectPath(rect.x, rect.y, rect.width, rect.height), {
+            x: 0,
+            y: 0,
+            borderColor: stroke,
+            borderWidth: weight,
+            ...(fill ? { color: fill } : {}),
+          });
+          continue;
+        }
         page.drawRectangle({
           x: rect.x,
           y: rect.y,
@@ -617,6 +627,27 @@ function drawInk(
     borderOpacity: 1,
     borderLineCap: LineCapStyle.Round,
   });
+}
+
+function roundedRectPath(x: number, y: number, w: number, h: number) {
+  const rx = Math.min(w * 0.18, w / 2);
+  const ry = Math.min(h * 0.18, h / 2);
+  const top = -(y + h);
+  const bottom = -y;
+  const right = x + w;
+  const n = (value: number) => value.toFixed(2);
+  return [
+    `M ${n(x + rx)} ${n(top)}`,
+    `L ${n(right - rx)} ${n(top)}`,
+    `A ${n(rx)} ${n(ry)} 0 0 1 ${n(right)} ${n(top + ry)}`,
+    `L ${n(right)} ${n(bottom - ry)}`,
+    `A ${n(rx)} ${n(ry)} 0 0 1 ${n(right - rx)} ${n(bottom)}`,
+    `L ${n(x + rx)} ${n(bottom)}`,
+    `A ${n(rx)} ${n(ry)} 0 0 1 ${n(x)} ${n(bottom - ry)}`,
+    `L ${n(x)} ${n(top + ry)}`,
+    `A ${n(rx)} ${n(ry)} 0 0 1 ${n(x + rx)} ${n(top)}`,
+    "Z",
+  ].join(" ");
 }
 
 function visualPointToPdf(

@@ -1264,7 +1264,18 @@ function ShapeGraphic({
   }
   return (
     <svg className="pointer-events-none size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <rect x="1" y="1" width="98" height="98" fill={paint} stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+      <rect
+        x="1"
+        y="1"
+        width="98"
+        height="98"
+        rx={kind === "round" ? 18 : 0}
+        ry={kind === "round" ? 18 : 0}
+        fill={paint}
+        stroke={stroke}
+        strokeWidth={sw}
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 }
