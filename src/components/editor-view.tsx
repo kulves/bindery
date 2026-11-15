@@ -860,59 +860,35 @@ export function EditorView() {
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1 rounded-full bg-card p-1">
-                {(Object.keys(TEXT_COLORS) as TextColor[]).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    aria-label={TEXT_COLORS[item].label}
-                    aria-pressed={(selectedShape?.color ?? color) === item}
-                    title={TEXT_COLORS[item].label}
-                    onClick={() => {
-                      setColor(item);
-                      if (selectedShape) patchShape(doc.id, selectedShape.id, { color: item });
-                    }}
-                    className={cn(
-                      "flex size-11 items-center justify-center rounded-full",
-                      (selectedShape?.color ?? color) === item ? "ring-2 ring-foreground" : "hover:bg-muted",
-                    )}
-                  >
-                    <span className="block size-6 rounded-full ring-1 ring-border" style={{ backgroundColor: TEXT_COLORS[item].css }} />
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-1 rounded-full bg-card p-1">
-                {(Object.keys(TEXT_FILLS) as TextFill[]).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    aria-label={TEXT_FILLS[item].label}
-                    aria-pressed={(selectedShape?.fill ?? fill) === item}
-                    title={TEXT_FILLS[item].label}
-                    onClick={() => {
-                      setFill(item);
-                      if (selectedShape) patchShape(doc.id, selectedShape.id, { fill: item });
-                    }}
-                    className={cn(
-                      "flex size-11 items-center justify-center rounded-full",
-                      (selectedShape?.fill ?? fill) === item ? "ring-2 ring-foreground" : "hover:bg-muted",
-                    )}
-                  >
-                    <span
-                      className="block size-6 rounded-xs ring-1 ring-border"
-                      style={{
-                        backgroundColor: item === "none" ? "transparent" : TEXT_FILLS[item].css,
-                        backgroundImage:
-                          item === "none"
-                            ? "linear-gradient(45deg, #d9d1c3 25%, transparent 25%, transparent 75%, #d9d1c3 75%), linear-gradient(45deg, #d9d1c3 25%, #faf7f0 25%, #faf7f0 75%, #d9d1c3 75%)"
-                            : undefined,
-                        backgroundSize: item === "none" ? "8px 8px" : undefined,
-                        backgroundPosition: item === "none" ? "0 0, 4px 4px" : undefined,
-                      }}
-                    />
-                  </button>
-                ))}
-              </div>
+              <ColorPalette
+                label="Line"
+                shape="circle"
+                value={selectedShape?.color ?? color}
+                options={(Object.keys(TEXT_COLORS) as TextColor[]).map((id) => ({
+                  id,
+                  label: TEXT_COLORS[id].label,
+                  css: TEXT_COLORS[id].css,
+                }))}
+                onPick={(item) => {
+                  setColor(item);
+                  if (selectedShape) patchShape(doc.id, selectedShape.id, { color: item });
+                }}
+              />
+              <ColorPalette
+                label="Fill"
+                shape="square"
+                value={selectedShape?.fill ?? fill}
+                options={(Object.keys(TEXT_FILLS) as TextFill[]).map((id) => ({
+                  id,
+                  label: TEXT_FILLS[id].label,
+                  css: TEXT_FILLS[id].css,
+                  none: id === "none",
+                }))}
+                onPick={(item) => {
+                  setFill(item);
+                  if (selectedShape) patchShape(doc.id, selectedShape.id, { fill: item });
+                }}
+              />
               <div className="flex rounded-full bg-card p-1">
                 {SHAPE_WEIGHTS.map((item) => (
                   <button
@@ -1117,62 +1093,35 @@ export function EditorView() {
                 <Italic className="size-4" />
               </button>
             </div>
-            <div className="flex items-center gap-1 rounded-full bg-card p-1">
-              {(Object.keys(TEXT_COLORS) as TextColor[]).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  aria-label={TEXT_COLORS[item].label}
-                  aria-pressed={(selected?.color ?? color) === item}
-                  title={TEXT_COLORS[item].label}
-                  onClick={() => {
-                    setColor(item);
-                    if (selected) patchTextBox(doc.id, selected.id, { color: item });
-                  }}
-                  className={cn(
-                    "flex size-11 items-center justify-center rounded-full",
-                    (selected?.color ?? color) === item ? "ring-2 ring-foreground" : "hover:bg-muted",
-                  )}
-                >
-                  <span
-                    className="block size-6 rounded-full ring-1 ring-border"
-                    style={{ backgroundColor: TEXT_COLORS[item].css }}
-                  />
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1 rounded-full bg-card p-1">
-              {(Object.keys(TEXT_FILLS) as TextFill[]).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  aria-label={TEXT_FILLS[item].label}
-                  aria-pressed={(selected?.fill ?? fill) === item}
-                  title={TEXT_FILLS[item].label}
-                  onClick={() => {
-                    setFill(item);
-                    if (selected) patchTextBox(doc.id, selected.id, { fill: item });
-                  }}
-                  className={cn(
-                    "flex size-11 items-center justify-center rounded-full",
-                    (selected?.fill ?? fill) === item ? "ring-2 ring-foreground" : "hover:bg-muted",
-                  )}
-                >
-                  <span
-                    className="block size-6 rounded-xs ring-1 ring-border"
-                    style={{
-                      backgroundColor: item === "none" ? "transparent" : TEXT_FILLS[item].css,
-                      backgroundImage:
-                        item === "none"
-                          ? "linear-gradient(45deg, #d9d1c3 25%, transparent 25%, transparent 75%, #d9d1c3 75%), linear-gradient(45deg, #d9d1c3 25%, #faf7f0 25%, #faf7f0 75%, #d9d1c3 75%)"
-                          : undefined,
-                      backgroundSize: item === "none" ? "8px 8px" : undefined,
-                      backgroundPosition: item === "none" ? "0 0, 4px 4px" : undefined,
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
+            <ColorPalette
+              label="Text"
+              shape="circle"
+              value={selected?.color ?? color}
+              options={(Object.keys(TEXT_COLORS) as TextColor[]).map((id) => ({
+                id,
+                label: TEXT_COLORS[id].label,
+                css: TEXT_COLORS[id].css,
+              }))}
+              onPick={(item) => {
+                setColor(item);
+                if (selected) patchTextBox(doc.id, selected.id, { color: item });
+              }}
+            />
+            <ColorPalette
+              label="Background"
+              shape="square"
+              value={selected?.fill ?? fill}
+              options={(Object.keys(TEXT_FILLS) as TextFill[]).map((id) => ({
+                id,
+                label: TEXT_FILLS[id].label,
+                css: TEXT_FILLS[id].css,
+                none: id === "none",
+              }))}
+              onPick={(item) => {
+                setFill(item);
+                if (selected) patchTextBox(doc.id, selected.id, { fill: item });
+              }}
+            />
             {selected && (
               <Button
                 variant="ghost"
@@ -1392,6 +1341,54 @@ export function EditorView() {
           Ctrl+Z undo · Ctrl+Shift+Z redo · Delete · Page Up/Down · Scroll when zoomed · Ctrl + mouse wheel zooms · Select grabs a box · Hand drags the page
         </p>
       </div>
+      </div>
+    </div>
+  );
+}
+
+function ColorPalette<T extends string>({
+  label,
+  value,
+  options,
+  shape,
+  onPick,
+}: {
+  label: string;
+  value: T;
+  options: Array<{ id: T; label: string; css: string; none?: boolean }>;
+  shape: "circle" | "square";
+  onPick: (id: T) => void;
+}) {
+  return (
+    <div className="rounded-lg bg-card p-2 shadow-[var(--shadow-border)]">
+      <p className="mb-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
+      <div className="grid grid-cols-6 gap-1">
+        {options.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            aria-label={item.label}
+            aria-pressed={value === item.id}
+            title={item.label}
+            onClick={() => onPick(item.id)}
+            className={cn(
+              "flex size-9 items-center justify-center rounded-md",
+              value === item.id ? "ring-2 ring-foreground" : "hover:bg-muted",
+            )}
+          >
+            <span
+              className={cn("block size-6 ring-1 ring-border", shape === "circle" ? "rounded-full" : "rounded-xs")}
+              style={{
+                backgroundColor: item.none ? "transparent" : item.css,
+                backgroundImage: item.none
+                  ? "linear-gradient(45deg, #d9d1c3 25%, transparent 25%, transparent 75%, #d9d1c3 75%), linear-gradient(45deg, #d9d1c3 25%, #faf7f0 25%, #faf7f0 75%, #d9d1c3 75%)"
+                  : undefined,
+                backgroundSize: item.none ? "8px 8px" : undefined,
+                backgroundPosition: item.none ? "0 0, 4px 4px" : undefined,
+              }}
+            />
+          </button>
+        ))}
       </div>
     </div>
   );

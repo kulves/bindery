@@ -2,8 +2,8 @@ import { PDFDocument, StandardFonts, rgb, BlendMode, LineCapStyle, type PDFFont 
 import { loadPdfjs } from "@/lib/pdf-render";
 
 export type TextFont = "sans" | "serif" | "mono";
-export type TextFill = "none" | "white" | "gray" | "blue" | "yellow" | "green" | "pink" | "navy";
-export type TextColor = "ink" | "white" | "gray" | "navy" | "red" | "green";
+export type TextFill = "none" | "white" | "gray" | "blue" | "yellow" | "green" | "pink" | "gold" | "peach" | "lilac" | "navy";
+export type TextColor = "ink" | "white" | "gray" | "navy" | "blue" | "gold" | "red" | "burgundy" | "orange" | "green";
 
 export interface TextBox {
   id: string;
@@ -104,6 +104,9 @@ export const TEXT_FILLS: Record<TextFill, { label: string; css: string; pdf: Ret
   yellow: { label: "Light yellow", css: "#f4ebb2", pdf: rgb(0.957, 0.922, 0.698) },
   green: { label: "Light green", css: "#d7eedd", pdf: rgb(0.843, 0.933, 0.867) },
   pink: { label: "Light pink", css: "#f6d6df", pdf: rgb(0.965, 0.839, 0.875) },
+  gold: { label: "Gold", css: "#f3e2b3", pdf: rgb(0.953, 0.886, 0.702) },
+  peach: { label: "Peach", css: "#f8d7c4", pdf: rgb(0.973, 0.843, 0.769) },
+  lilac: { label: "Lilac", css: "#e4d7f2", pdf: rgb(0.894, 0.843, 0.949) },
   navy: { label: "Navy", css: "#1a2e3e", pdf: rgb(0.102, 0.18, 0.243) },
 };
 
@@ -118,7 +121,11 @@ export const TEXT_COLORS: Record<TextColor, { label: string; css: string; pdf: R
   white: { label: "White", css: "#ffffff", pdf: rgb(1, 1, 1) },
   gray: { label: "Gray", css: "#6e675c", pdf: rgb(0.431, 0.404, 0.361) },
   navy: { label: "Navy", css: "#1a2e3e", pdf: rgb(0.102, 0.18, 0.243) },
+  blue: { label: "Blue", css: "#2f5d8c", pdf: rgb(0.184, 0.365, 0.549) },
+  gold: { label: "Gold", css: "#c9962c", pdf: rgb(0.788, 0.588, 0.173) },
+  orange: { label: "Orange", css: "#d4652f", pdf: rgb(0.831, 0.396, 0.184) },
   red: { label: "Red", css: "#8f3d32", pdf: rgb(0.561, 0.239, 0.196) },
+  burgundy: { label: "Burgundy", css: "#8b3050", pdf: rgb(0.545, 0.188, 0.314) },
   green: { label: "Green", css: "#2d6a4f", pdf: rgb(0.176, 0.416, 0.31) },
 };
 
