@@ -1025,7 +1025,7 @@ export function EditorView() {
                 step={0.5}
                 value={selected?.size ?? size}
                 aria-label="Font size"
-                className="w-20"
+                className="h-7 w-16 px-2 text-xs"
                 onChange={(event) => {
                   const raw = Number(event.target.value);
                   const next = Math.max(1, Math.min(72, Number.isFinite(raw) ? Math.round(raw * 2) / 2 : 14));
@@ -1034,27 +1034,25 @@ export function EditorView() {
                 }}
               />
             </label>
-            <div className="flex rounded-full bg-card p-1">
-              {(Object.keys(TEXT_FONTS) as TextFont[]).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => {
-                    setFont(item);
-                    if (selected) patchTextBox(doc.id, selected.id, { font: item });
-                  }}
-                  className={cn(
-                    "h-8 min-w-14 rounded-full px-2.5 text-xs",
-                    TEXT_FONTS[item].className,
-                    (selected?.font ?? font) === item
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-muted",
-                  )}
-                >
-                  {TEXT_FONTS[item].label}
-                </button>
-              ))}
-            </div>
+            <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              Font
+              <select
+                aria-label="Font"
+                value={selected?.font ?? font}
+                onChange={(event) => {
+                  const next = event.target.value as TextFont;
+                  setFont(next);
+                  if (selected) patchTextBox(doc.id, selected.id, { font: next });
+                }}
+                className="h-7 rounded-md bg-card px-2 text-xs text-foreground shadow-[var(--shadow-border)]"
+              >
+                {(Object.keys(TEXT_FONTS) as TextFont[]).map((item) => (
+                  <option key={item} value={item}>
+                    {TEXT_FONTS[item].label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="flex rounded-full bg-card p-1">
               <button
                 type="button"
@@ -1359,37 +1357,74 @@ function ColorPalette<T extends string>({
   shape: "circle" | "square";
   onPick: (id: T) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const current = options.find((item) => item.id === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    }
+    window.addEventListener("pointerdown", onPointer);
+    return () => window.removeEventListener("pointerdown", onPointer);
+  }, [open]);
+
+  function swatchStyle(item: { css: string; none?: boolean } | undefined) {
+    if (!item) return undefined;
+    return {
+      backgroundColor: item.none ? "transparent" : item.css,
+      backgroundImage: item.none
+        ? "linear-gradient(45deg, #d9d1c3 25%, transparent 25%, transparent 75%, #d9d1c3 75%), linear-gradient(45deg, #d9d1c3 25%, #faf7f0 25%, #faf7f0 75%, #d9d1c3 75%)"
+        : undefined,
+      backgroundSize: item.none ? "8px 8px" : undefined,
+      backgroundPosition: item.none ? "0 0, 4px 4px" : undefined,
+    };
+  }
+
   return (
-    <div className="rounded-lg bg-card px-1.5 py-1 shadow-[var(--shadow-border)]">
-      <p className="mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
-      <div className="grid grid-cols-6 gap-1">
-        {options.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            aria-label={item.label}
-            aria-pressed={value === item.id}
-            title={item.label}
-            onClick={() => onPick(item.id)}
-            className={cn(
-              "flex size-7 items-center justify-center rounded-md",
-              value === item.id ? "ring-2 ring-foreground" : "hover:bg-muted",
-            )}
-          >
-            <span
-              className={cn("block size-6 ring-1 ring-border", shape === "circle" ? "rounded-full" : "rounded-xs")}
-              style={{
-                backgroundColor: item.none ? "transparent" : item.css,
-                backgroundImage: item.none
-                  ? "linear-gradient(45deg, #d9d1c3 25%, transparent 25%, transparent 75%, #d9d1c3 75%), linear-gradient(45deg, #d9d1c3 25%, #faf7f0 25%, #faf7f0 75%, #d9d1c3 75%)"
-                  : undefined,
-                backgroundSize: item.none ? "8px 8px" : undefined,
-                backgroundPosition: item.none ? "0 0, 4px 4px" : undefined,
-              }}
-            />
-          </button>
-        ))}
-      </div>
+    <div ref={root} className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={`${label} color`}
+        onClick={() => setOpen((on) => !on)}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md bg-card px-2 text-xs text-foreground shadow-[var(--shadow-border)]"
+      >
+        <span
+          className={cn("block size-3.5 ring-1 ring-border", shape === "circle" ? "rounded-full" : "rounded-xs")}
+          style={swatchStyle(current)}
+        />
+        {label}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-40 w-44 rounded-lg bg-card p-2 shadow-[var(--shadow-border)]">
+          <div className="grid grid-cols-5 gap-1">
+            {options.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                aria-label={item.label}
+                aria-pressed={value === item.id}
+                title={item.label}
+                onClick={() => {
+                  onPick(item.id);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-md",
+                  value === item.id ? "ring-2 ring-foreground" : "hover:bg-muted",
+                )}
+              >
+                <span
+                  className={cn("block size-5 ring-1 ring-border", shape === "circle" ? "rounded-full" : "rounded-xs")}
+                  style={swatchStyle(item)}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
