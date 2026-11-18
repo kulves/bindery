@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.2.18";
+export const APP_VERSION = "1.2.19";
 
 export const RELEASES_URL = "https://github.com/kulves/bindery/releases/latest";
 

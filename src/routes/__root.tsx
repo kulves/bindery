@@ -13,7 +13,7 @@ export const Route = createRootRoute({
       { title: APP_NAME },
       {
         name: "description",
-        content: "Papyrus, with the Patina Lite PDF editor. Split, merge, and edit pages in your browser. Files never leave this device.",
+        content: "Papyrus Lite. Split, merge, and edit pages in your browser. Files never leave this device.",
       },
       { name: "theme-color", content: "#1a2e3e" },
     ],

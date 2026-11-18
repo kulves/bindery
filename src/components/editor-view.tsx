@@ -1317,7 +1317,7 @@ export function EditorView() {
 
       <div className="flex flex-col gap-1">
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Patina Lite
+          Lite
         </p>
         <h2 className="font-display text-2xl leading-tight">{doc.name}</h2>
         <p className="text-sm tabular-nums text-muted-foreground">

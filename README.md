@@ -1,6 +1,6 @@
 # Papyrus
 
-A local PDF workshop: **merge**, **split**, and **edit pages** in the browser. The editor is **Patina Lite**. Files never leave your machine.
+A local PDF workshop: **merge**, **split**, and **edit pages** in the browser. The editor is **Papyrus Lite**. Files never leave your machine.
 
 On the Edit tab you can add text boxes, highlight, sign, rotate, and reorder pages. Papyrus does not change the original words in an uploaded PDF.
 

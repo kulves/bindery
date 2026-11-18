@@ -39,7 +39,7 @@ export function BinderyApp() {
               <div>
                 <div className="flex items-baseline gap-2">
                   <p className="font-display text-xl leading-none tracking-tight">Papyrus</p>
-                  <p className="text-[11px] tracking-wide text-primary-foreground/70">Patina Lite</p>
+                  <p className="text-[11px] tracking-wide text-primary-foreground/70">Lite</p>
                 </div>
                 <p className="mt-0.5 text-xs text-ember">
                   Split, merge, and shape PDFs on this device
