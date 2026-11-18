@@ -33,15 +33,15 @@ export function BinderyApp() {
     <TooltipProvider delayDuration={250}>
       <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
         <header className="z-20 shrink-0 bg-primary text-primary-foreground">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <div className="flex items-center gap-3">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex items-center gap-2">
               <Mark />
               <div>
                 <div className="flex items-baseline gap-2">
-                  <p className="font-display text-2xl leading-none tracking-tight">Papyrus</p>
+                  <p className="font-display text-xl leading-none tracking-tight">Papyrus</p>
                   <p className="text-[11px] tracking-wide text-primary-foreground/70">Patina Lite</p>
                 </div>
-                <p className="mt-1 text-xs text-ember">
+                <p className="mt-0.5 text-xs text-ember">
                   Split, merge, and shape PDFs on this device
                 </p>
               </div>
@@ -50,7 +50,7 @@ export function BinderyApp() {
               {docs.length > 0 && (
                 <Button
                   variant="ghost"
-                  className="text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+                  className="h-8 px-3 text-xs text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
                   onClick={() => reset()}
                 >
                   Clear bench
@@ -61,7 +61,7 @@ export function BinderyApp() {
                   href={DOWNLOAD_URL}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex h-11 items-center gap-2 rounded-full px-3 text-sm font-medium text-primary-foreground hover:bg-primary-foreground/10"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-primary-foreground hover:bg-primary-foreground/10"
                 >
                   <Download className="size-4" />
                   Download
@@ -74,7 +74,7 @@ export function BinderyApp() {
                     type="button"
                     onClick={() => setTool(item.id)}
                     className={cn(
-                      "h-11 min-w-20 rounded-full px-4 text-sm font-medium transition-[background-color,color] duration-150 ease-out",
+                      "h-8 min-w-16 rounded-full px-3 text-xs font-medium transition-[background-color,color] duration-150 ease-out",
                       tool === item.id
                         ? "bg-card text-foreground"
                         : "text-primary-foreground/80 hover:text-primary-foreground",
@@ -137,5 +137,5 @@ export function BinderyApp() {
 }
 
 function Mark() {
-  return <img src="/papyrus-logo.png" alt="" className="size-10 shrink-0 rounded-lg" />;
+  return <img src="/papyrus-logo.png" alt="" className="size-8 shrink-0 rounded-md" />;
 }

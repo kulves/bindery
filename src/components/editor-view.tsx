@@ -542,8 +542,8 @@ export function EditorView() {
 
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-[90rem] flex-1 flex-col">
-      <header className="flex shrink-0 flex-col gap-2 bg-background pb-2">
-        <div className="flex flex-wrap items-center gap-1 rounded-lg bg-card p-2 shadow-[var(--shadow-border)]">
+      <header className="flex shrink-0 flex-col gap-1 bg-background pb-1">
+        <div className="flex flex-wrap items-center gap-0.5 rounded-lg bg-card px-1 py-0.5 shadow-[var(--shadow-border)]">
           <ToolButton
             label="Add text"
             pressed={textMode}
@@ -715,7 +715,7 @@ export function EditorView() {
             <Hand />
             Hand
           </ToolButton>
-          <span className="mx-2 hidden h-8 w-px bg-border sm:block" />
+          <span className="mx-1 hidden h-4 w-px bg-border sm:block" />
           <ToolButton label="Zoom out" disabled={zoom <= ZOOM_MIN} onClick={() => setZoom((value) => stepZoom(value, -1))}>
             <ZoomOut />
             Out
@@ -731,7 +731,7 @@ export function EditorView() {
               onChange={(event) => setZoom(Number(event.target.value) / 100)}
               className="h-1.5 w-24 cursor-pointer accent-primary"
             />
-            <span className="min-w-12 text-center text-sm tabular-nums text-muted-foreground">
+            <span className="min-w-10 text-center text-xs tabular-nums text-muted-foreground">
               {Math.round(zoom * 100)}%
             </span>
           </label>
@@ -776,7 +776,7 @@ export function EditorView() {
           </ToolButton>
         </div>
         {highlightMode && (
-          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex flex-col gap-2 rounded-lg bg-secondary p-2 sm:flex-row sm:flex-wrap sm:items-center">
             <p className="text-sm text-muted-foreground sm:flex-1">
               Click a line to highlight it, or drag to mark a region.
             </p>
@@ -795,7 +795,7 @@ export function EditorView() {
           </div>
         )}
         {drawMode && (
-          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex flex-col gap-2 rounded-lg bg-secondary p-2 sm:flex-row sm:flex-wrap sm:items-center">
             <p className="text-sm text-muted-foreground sm:flex-1">
               Draw on the page. Undo takes back the last stroke.
             </p>
@@ -806,7 +806,7 @@ export function EditorView() {
                   type="button"
                   onClick={() => setPenWidth(item.width)}
                   className={cn(
-                    "h-11 rounded-full px-3 text-sm",
+                    "h-8 rounded-full px-2.5 text-xs",
                     penWidth === item.width
                       ? "bg-primary text-primary-foreground"
                       : "text-foreground hover:bg-muted",
@@ -823,7 +823,7 @@ export function EditorView() {
           </div>
         )}
         {shapeMode && (
-          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3">
+          <div className="flex flex-col gap-2 rounded-lg bg-secondary p-2">
             <p className="text-sm text-muted-foreground">
               Drag on the page. Rectangle, rounded rectangle, ellipse, or line. Drag the grip to move, a corner to resize.
             </p>
@@ -839,7 +839,7 @@ export function EditorView() {
                       if (selectedShape) patchShape(doc.id, selectedShape.id, { kind: item.id });
                     }}
                     className={cn(
-                      "inline-flex h-11 items-center gap-1 rounded-full px-3 text-sm",
+                      "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-xs",
                       (selectedShape?.kind ?? shapeKind) === item.id
                         ? "bg-primary text-primary-foreground"
                         : "text-foreground hover:bg-muted",
@@ -899,7 +899,7 @@ export function EditorView() {
                       if (selectedShape) patchShape(doc.id, selectedShape.id, { weight: item.width });
                     }}
                     className={cn(
-                      "h-11 rounded-full px-3 text-sm",
+                      "h-8 rounded-full px-2.5 text-xs",
                       (selectedShape?.weight ?? shapeWeight) === item.width
                         ? "bg-primary text-primary-foreground"
                         : "text-foreground hover:bg-muted",
@@ -913,7 +913,7 @@ export function EditorView() {
           </div>
         )}
         {signMode && (
-          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3">
+          <div className="flex flex-col gap-2 rounded-lg bg-secondary p-2">
             <p className="text-sm text-muted-foreground">
               {signature
                 ? "Click the page to stamp your signature, date, time, and IP. Drag the grip to move it."
@@ -967,7 +967,7 @@ export function EditorView() {
           </div>
         )}
         {imageMode && (
-          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex flex-col gap-2 rounded-lg bg-secondary p-2 sm:flex-row sm:flex-wrap sm:items-center">
             <p className="text-sm text-muted-foreground sm:flex-1">
               {pendingPicture
                 ? "Click the page to place the image. Drag a corner to resize."
@@ -999,7 +999,7 @@ export function EditorView() {
               <img
                 src={pendingPicture.dataUrl}
                 alt=""
-                className="h-11 w-16 rounded-xs object-cover shadow-[var(--shadow-border)]"
+                className="h-8 w-12 rounded-xs object-cover shadow-[var(--shadow-border)]"
               />
             )}
           </div>
@@ -1010,7 +1010,7 @@ export function EditorView() {
           </p>
         )}
         {(textMode || selected) && (
-          <div className="flex flex-col gap-3 rounded-lg bg-secondary p-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex flex-col gap-2 rounded-lg bg-secondary p-2 sm:flex-row sm:flex-wrap sm:items-center">
             <p className="text-sm text-muted-foreground sm:flex-1">
               {selectMode
                 ? "Select is on. Click a text box, highlight, image, shape, or signature."
@@ -1044,7 +1044,7 @@ export function EditorView() {
                     if (selected) patchTextBox(doc.id, selected.id, { font: item });
                   }}
                   className={cn(
-                    "h-11 min-w-16 rounded-full px-3 text-sm",
+                    "h-8 min-w-14 rounded-full px-2.5 text-xs",
                     TEXT_FONTS[item].className,
                     (selected?.font ?? font) === item
                       ? "bg-primary text-primary-foreground"
@@ -1066,7 +1066,7 @@ export function EditorView() {
                   if (selected) patchTextBox(doc.id, selected.id, { bold: next });
                 }}
                 className={cn(
-                  "inline-flex size-11 items-center justify-center rounded-full",
+                  "inline-flex size-8 items-center justify-center rounded-full",
                   (selected?.bold ?? bold)
                     ? "bg-primary text-primary-foreground"
                     : "text-foreground hover:bg-muted",
@@ -1084,7 +1084,7 @@ export function EditorView() {
                   if (selected) patchTextBox(doc.id, selected.id, { italic: next });
                 }}
                 className={cn(
-                  "inline-flex size-11 items-center justify-center rounded-full",
+                  "inline-flex size-8 items-center justify-center rounded-full",
                   (selected?.italic ?? italic)
                     ? "bg-primary text-primary-foreground"
                     : "text-foreground hover:bg-muted",
@@ -1166,7 +1166,7 @@ export function EditorView() {
                 setSelectedId(null);
               }}
               className={cn(
-                "h-11 shrink-0 rounded-sm px-3 text-sm",
+                "h-8 shrink-0 rounded-sm px-2.5 text-xs",
                 item.id === doc.id ? "bg-primary text-primary-foreground" : "bg-secondary",
               )}
             >
@@ -1360,8 +1360,8 @@ function ColorPalette<T extends string>({
   onPick: (id: T) => void;
 }) {
   return (
-    <div className="rounded-lg bg-card p-2 shadow-[var(--shadow-border)]">
-      <p className="mb-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
+    <div className="rounded-lg bg-card px-1.5 py-1 shadow-[var(--shadow-border)]">
+      <p className="mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
       <div className="grid grid-cols-6 gap-1">
         {options.map((item) => (
           <button
@@ -1372,7 +1372,7 @@ function ColorPalette<T extends string>({
             title={item.label}
             onClick={() => onPick(item.id)}
             className={cn(
-              "flex size-9 items-center justify-center rounded-md",
+              "flex size-7 items-center justify-center rounded-md",
               value === item.id ? "ring-2 ring-foreground" : "hover:bg-muted",
             )}
           >
@@ -1414,7 +1414,7 @@ function ToolButton({
       onClick={onClick}
       aria-label={label}
       aria-pressed={pressed}
-      className="px-3"
+      className="h-7 gap-1 px-2 text-xs [&_svg]:size-3.5"
     >
       {children}
     </Button>
