@@ -19,6 +19,8 @@ export interface TextBox {
   italic: boolean;
   fill: TextFill;
   color: TextColor;
+  border?: TextColor | "none";
+  borderWeight?: number;
   replace: boolean;
   sourceId?: string;
 }
@@ -317,6 +319,17 @@ export async function applyTextBoxes(bytes: Uint8Array, boxes: TextBox[]): Promi
             });
           }
           baseline -= size * 1.25;
+        }
+        const border = box.border ?? "none";
+        if (border !== "none") {
+          page.drawRectangle({
+            x,
+            y,
+            width,
+            height,
+            borderColor: TEXT_COLORS[border].pdf,
+            borderWidth: Math.max(0.4, box.borderWeight ?? 1),
+          });
         }
       }
       jsPage.cleanup();

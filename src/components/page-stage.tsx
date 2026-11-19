@@ -35,6 +35,8 @@ interface PageStageProps {
   italic: boolean;
   fill: TextFill;
   color: TextColor;
+  border: TextColor | "none";
+  borderWeight: number;
   penWidth: number;
   shapeKind: ShapeKind;
   shapeWeight: number;
@@ -124,6 +126,8 @@ export function PageStage({
   italic,
   fill,
   color,
+  border,
+  borderWeight,
   penWidth,
   shapeKind,
   shapeWeight,
@@ -237,6 +241,8 @@ export function PageStage({
       italic,
       fill,
       color,
+      border,
+      borderWeight,
       replace: false,
     };
     onAdd(box);
@@ -1095,6 +1101,7 @@ export function PageStage({
 
       {pageBoxes.map((box) => {
         const selected = box.id === selectedId;
+        const borderId = box.border ?? "none";
         return (
           <div
             key={box.id}
@@ -1102,15 +1109,15 @@ export function PageStage({
             onPointerMove={onDragMove}
             onPointerUp={onDragUp}
             onClick={(event) => event.stopPropagation()}
-            className={cn(
-              "absolute",
-              selected ? "z-10 ring-2 ring-foreground" : "ring-1 ring-accent/50",
-            )}
+            className={cn("absolute box-border", selected && "z-10 ring-2 ring-foreground")}
             style={{
               left: `${box.nx * 100}%`,
               top: `${box.ny * 100}%`,
               width: `${box.nw * 100}%`,
               height: `${box.nh * 100}%`,
+              borderStyle: borderId === "none" ? "none" : "solid",
+              borderWidth: borderId === "none" ? 0 : Math.max(1, box.borderWeight ?? 1),
+              borderColor: borderId === "none" ? "transparent" : TEXT_COLORS[borderId].css,
             }}
           >
             <textarea

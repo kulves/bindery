@@ -130,6 +130,8 @@ export function EditorView() {
   const [italic, setItalic] = useState(false);
   const [fill, setFill] = useState<TextFill>("none");
   const [color, setColor] = useState<TextColor>("ink");
+  const [border, setBorder] = useState<TextColor | "none">("none");
+  const [borderWeight, setBorderWeight] = useState(1);
   const [penWidth, setPenWidth] = useState(3.2);
   const [zoom, setZoom] = useState(1);
   const [signPaths, setSignPaths] = useState<Array<Array<{ nx: number; ny: number }>>>([]);
@@ -1120,6 +1122,41 @@ export function EditorView() {
                 if (selected) patchTextBox(doc.id, selected.id, { fill: item });
               }}
             />
+            <ColorPalette
+              label="Border"
+              shape="square"
+              value={selected?.border ?? border}
+              options={[
+                { id: "none" as const, label: "Transparent", css: "transparent", none: true },
+                ...(Object.keys(TEXT_COLORS) as TextColor[]).map((id) => ({
+                  id,
+                  label: TEXT_COLORS[id].label,
+                  css: TEXT_COLORS[id].css,
+                })),
+              ]}
+              onPick={(item) => {
+                setBorder(item);
+                if (selected) patchTextBox(doc.id, selected.id, { border: item });
+              }}
+            />
+            <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              Edge
+              <select
+                aria-label="Border thickness"
+                value={String(selected?.borderWeight ?? borderWeight)}
+                onChange={(event) => {
+                  const next = Number(event.target.value);
+                  setBorderWeight(next);
+                  if (selected) patchTextBox(doc.id, selected.id, { borderWeight: next });
+                }}
+                className="h-7 rounded-md bg-card px-2 text-xs text-foreground shadow-[var(--shadow-border)]"
+              >
+                <option value="1">Fine</option>
+                <option value="2">Medium</option>
+                <option value="3.5">Thick</option>
+                <option value="6">Heavy</option>
+              </select>
+            </label>
             {selected && (
               <Button
                 variant="ghost"
@@ -1247,6 +1284,8 @@ export function EditorView() {
             italic={italic}
             fill={fill}
             color={color}
+            border={selected?.border ?? border}
+            borderWeight={selected?.borderWeight ?? borderWeight}
             penWidth={penWidth}
             signature={signature}
             picture={pendingPicture}
