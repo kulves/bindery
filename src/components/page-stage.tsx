@@ -394,7 +394,8 @@ export function PageStage({
   }
 
   function onBoxPointerDown(event: ReactPointerEvent<HTMLDivElement>, box: TextBox) {
-    if (handMode || !(textMode || selectMode)) return;
+    if (handMode) return;
+    if (!textMode && !selectMode && (highlightMode || drawMode || shapeMode || signMode || imageMode)) return;
     if ((event.target as HTMLElement).closest("[data-handle],[data-move],[data-box-action]")) return;
     if ((event.target as HTMLElement).tagName === "TEXTAREA") return;
     event.preventDefault();

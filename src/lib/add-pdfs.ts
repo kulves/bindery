@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { createBlankDocument, createSampleDocument, loadPdfFile, type PdfDoc } from "@/lib/pdf";
+import { createTemplate, type TemplateKind } from "@/lib/templates";
 import { renderThumbnails } from "@/lib/pdf-render";
 import { useWorkspace } from "@/store/workspace";
 
@@ -64,6 +65,23 @@ export async function addBlank() {
   } catch (err) {
     console.error(err);
     toast.error("Couldn’t add a blank page.");
+  }
+}
+
+export async function addTemplate(kind: TemplateKind) {
+  try {
+    const made = await createTemplate(kind);
+    const store = useWorkspace.getState();
+    store.addDocs([made.doc]);
+    useWorkspace.setState((state) => ({
+      textBoxes: { ...state.textBoxes, [made.doc.id]: made.boxes },
+      activeId: made.doc.id,
+      tool: "edit",
+    }));
+    hydrateThumbs(made.doc);
+  } catch (err) {
+    console.error(err);
+    toast.error("Couldn’t open that template.");
   }
 }
 

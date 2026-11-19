@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropZone } from "@/components/drop-zone";
 import { PageStage } from "@/components/page-stage";
-import { addBlank, addSample, rehydrate } from "@/lib/add-pdfs";
+import { addBlank, addSample, addTemplate, rehydrate } from "@/lib/add-pdfs";
 import {
   downloadBytes,
   getPageCount,
@@ -386,6 +386,15 @@ export function EditorView() {
         <div className="flex flex-wrap justify-center gap-2">
           <Button variant="outline" onClick={() => void addBlank()}>
             Start with a blank page
+          </Button>
+          <Button variant="outline" onClick={() => void addTemplate("registration")}>
+            Registration form
+          </Button>
+          <Button variant="outline" onClick={() => void addTemplate("invoice")}>
+            Invoice
+          </Button>
+          <Button variant="outline" onClick={() => void addTemplate("letter")}>
+            Letter
           </Button>
           <Button variant="outline" onClick={() => void addSample("report")}>
             Try a 6-page sample
@@ -776,6 +785,23 @@ export function EditorView() {
             <Trash2 />
             Delete
           </ToolButton>
+          <label className="ml-1 flex items-center">
+            <select
+              aria-label="Add a template"
+              defaultValue=""
+              onChange={(event) => {
+                const kind = event.target.value;
+                event.currentTarget.value = "";
+                if (kind === "registration" || kind === "invoice" || kind === "letter") void addTemplate(kind);
+              }}
+              className="h-7 rounded-md bg-background px-2 text-xs text-foreground"
+            >
+              <option value="">Template</option>
+              <option value="registration">Registration form</option>
+              <option value="invoice">Invoice</option>
+              <option value="letter">Letter</option>
+            </select>
+          </label>
         </div>
         {highlightMode && (
           <div className="flex flex-col gap-2 rounded-lg bg-secondary p-2 sm:flex-row sm:flex-wrap sm:items-center">
